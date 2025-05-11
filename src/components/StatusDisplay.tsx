@@ -109,12 +109,19 @@ const StatusDisplay: React.FC<StatusDisplayProps> = ({
   const connectionInfo = isConnected ? `Connected to: ${opponentPeerId || 'Opponent'}` : 'Not connected.';
 
   return (
-    <div className="status-display" style={{ margin: '10px 0', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}>
-      <h4>Game Status</h4>
-      <p data-testid="status-text"><strong>{statusText}</strong></p>
-      {isConnected && localPlayerColor && <p>{playerInfo}</p>}
-      <p>{connectionInfo}</p>
-      {/* More detailed connection status from useGameConnection can be added if needed */}
+    <div className="status-display">
+      <h4 className="sd-title">Game Status</h4>
+      <p className="sd-status-text" data-testid="status-text">
+        <strong>{statusText}</strong>
+      </p>
+      <div className="sd-info-grid">
+        {isConnected && localPlayerColor && <p className="sd-player-info">{playerInfo}</p>}
+        <p className="sd-connection-info">{connectionInfo}</p>
+      </div>
+      {/* Specific status indicators can be added here if needed, e.g., for check */}
+      {(gameStatus === GameStatus.WHITE_IN_CHECK || gameStatus === GameStatus.BLACK_IN_CHECK) && (
+        <p className="sd-check-indicator">CHECK!</p>
+      )}
     </div>
   );
 };

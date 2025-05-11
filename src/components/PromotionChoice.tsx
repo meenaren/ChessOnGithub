@@ -21,41 +21,22 @@ const PromotionChoice: React.FC<PromotionChoiceProps> = ({ onSelect, playerColor
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        padding: '20px',
-        borderRadius: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        zIndex: 1000, // Ensure it's on top
-      }}
-    >
-      <h4 style={{ color: 'white', margin: '0 0 15px 0' }}>Promote Pawn To:</h4>
-      <div style={{ display: 'flex', gap: '10px' }}>
-        {promotionPieces.map((piece) => (
-          <button
-            key={piece}
-            onClick={() => onSelect(piece)}
-            style={{
-              fontSize: '2em',
-              padding: '10px 15px',
-              cursor: 'pointer',
-              border: '2px solid #555',
-              backgroundColor: '#333',
-              color: 'white',
-              borderRadius: '5px',
-            }}
-            title={`Promote to ${piece.toUpperCase()}`}
-          >
-            {pieceUnicode[playerColor][piece]}
-          </button>
-        ))}
+    <div className="promotion-choice-overlay">
+      <div className="promotion-choice-dialog">
+        <h4 className="pc-title">Promote Pawn To:</h4>
+        <div className="pc-button-group">
+          {promotionPieces.map((piece) => (
+            <button
+              key={piece}
+              onClick={() => onSelect(piece)}
+              className="pc-button"
+              title={`Promote to ${piece.toUpperCase()}`}
+            >
+              <span className="pc-piece-unicode">{pieceUnicode[playerColor][piece]}</span>
+              <span className="pc-piece-name">{piece.toUpperCase()}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

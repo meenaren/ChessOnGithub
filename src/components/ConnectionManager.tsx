@@ -50,42 +50,43 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   };
 
   return (
-    <div style={{ border: '1px solid #ccc', padding: '20px', margin: '20px' }}>
-      <h2>Connection Manager</h2>
-      <p><strong>Status:</strong> {connectionStatus}</p>
-      {error && <p style={{ color: 'red' }}><strong>Error:</strong> {error}</p>}
+    <div className="connection-manager">
+      <h3 className="cm-title">Connection Manager</h3>
+      <div className="cm-status-section">
+        <p className="cm-status"><strong>Status:</strong> <span className={`status-${connectionStatus?.toLowerCase().replace(/_/g, '-')}`}>{connectionStatus}</span></p>
+        {error && <p className="cm-error"><strong>Error:</strong> {error}</p>}
+      </div>
       
-      {peerId && <p>My Peer ID: {peerId}</p>}
-      {/* Display gameId passed as prop */}
-      {gameId && <p>Current Game ID: {gameId}</p>}
+      <div className="cm-info-section">
+        {peerId && <p>My Peer ID: <span className="cm-peer-id">{peerId}</span></p>}
+        {gameId && <p>Current Game ID: <span className="cm-game-id">{gameId}</span></p>}
+      </div>
       
-      {!isConnected && !gameId && ( // Show host/join options if not connected and no gameId from App.tsx
-        <div>
-          <button onClick={handleHostGameClick} style={{ marginRight: '10px' }}>
+      {!isConnected && !gameId && (
+        <div className="cm-actions-section">
+          <button onClick={handleHostGameClick} className="cm-button cm-button-host mb-1">
             Host New Game
           </button>
-          <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+          <div className="cm-join-group">
             <input
               type="text"
               placeholder="Enter Game ID to Join"
               value={roomIdToJoin}
               onChange={(e) => setRoomIdToJoin(e.target.value)}
-              style={{ marginRight: '10px' }}
+              className="cm-input cm-input-join-id"
             />
-            <button onClick={handleJoinGameClick}>Join Game</button>
+            <button onClick={handleJoinGameClick} className="cm-button cm-button-join">Join Game</button>
           </div>
         </div>
       )}
 
-      {/* Display additional info if gameId exists (meaning a game is active or being set up) */}
       {gameId && (
-        <div>
+        <div className="cm-game-active-info">
           {isHost !== null && <p>Role: {isHost ? 'Host' : 'Joiner'}</p>}
-          {/* assignedColor and opponentPeerId are now props */}
           {assignedColor && <p>Your Color: {assignedColor === 'w' ? 'White' : 'Black'}</p>}
-          {opponentPeerId && <p>Opponent ID: {opponentPeerId}</p>}
-          {isConnected && <p><strong>Successfully connected to opponent!</strong></p>}
-          <button onClick={handleLeaveGameClick} style={{ marginTop: '10px' }}>
+          {opponentPeerId && <p>Opponent ID: <span className="cm-peer-id">{opponentPeerId}</span></p>}
+          {isConnected && <p className="cm-connected-success"><strong>Successfully connected to opponent!</strong></p>}
+          <button onClick={handleLeaveGameClick} className="cm-button cm-button-leave mt-1">
             Leave Game
           </button>
         </div>

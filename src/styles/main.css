@@ -1,20 +1,408 @@
-/* Placeholder for main.css */
-body {
-  font-family: sans-serif;
+html, body {
+  height: 100%;
   margin: 0;
   padding: 0;
-  background-color: #f0f0f0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f4f7f6; /* A slightly softer background */
+  color: #333;
+  line-height: 1.6;
+  display: flex; /* Use flex to make #root take full height */
+  flex-direction: column; /* Stack children vertically */
 }
 
 #root {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  flex-grow: 1; /* Allow #root to take up available vertical space */
+  display: flex;
+  flex-direction: column; /* Children of #root (App) stack vertically */
+  width: 100%;
 }
 
-/* Add more global styles or component-specific styles here or in separate files */
+.App {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* Ensure App takes at least full viewport height */
+  background-color: #ffffff; /* White background for the app content area */
+}
+
+/* NavBar Styles */
+.navbar {
+  background-color: #2c3e50; /* Darker, more professional blue/grey */
+  color: white;
+  padding: 0.8rem 1.5rem; /* Adjusted padding */
+  text-align: left; /* Align title to the left */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  /* margin-bottom: 1rem; /* Removed, main content will handle its own margin/padding */
+}
+
+.navbar-title {
+  font-size: 1.4rem; /* Slightly adjusted size */
+  font-weight: 600; /* Slightly less bold */
+}
+
+/* Main Content Area */
+.app-main-content {
+  flex-grow: 1; /* Allows main content to fill available space */
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column; /* Default to column, can be row for side-by-side */
+  align-items: center; /* Center content horizontally by default */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* General Container for sections within main content */
+.content-section {
+  width: 100%;
+  max-width: 1200px; /* Max width for content */
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* Responsive adjustments */
+@media (min-width: 768px) {
+  .app-main-content {
+    flex-direction: row; /* Side-by-side layout on larger screens */
+    align-items: flex-start; /* Align items to the top */
+    justify-content: space-around; /* Distribute space */
+  }
+  .content-section {
+    margin-right: 1rem; /* Add some space between sections */
+  }
+  .content-section:last-child {
+    margin-right: 0;
+  }
+}
+
+/* Utility classes */
+.text-center {
+  text-align: center;
+}
+
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+
+/* Basic button styling */
+button {
+  background-color: #3498db; /* A pleasant blue */
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background-color 0.2s ease;
+}
+
+button:hover {
+  background-color: #2980b9; /* Darker blue on hover */
+}
+
+button:disabled {
+  background-color: #bdc3c7; /* Grey for disabled */
+  cursor: not-allowed;
+}
+
+/* Basic input styling */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+select {
+  padding: 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  width: calc(100% - 1.2rem); /* Full width minus padding */
+  box-sizing: border-box;
+}
+
+/* Styles for game components to ensure visibility */
+.game-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center board and status */
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .game-area {
+    /* On larger screens, game area might take a specific portion if side-by-side with ConnectionManager */
+    flex-basis: 60%; /* Example: takes 60% of the row width */
+    max-width: 600px; /* Max width for the board area */
+  }
+  .connection-manager-section {
+    flex-basis: 35%; /* Example: takes 35% */
+  }
+}
+
+.board-container {
+  width: 100%; /* Allows react-chessboard to fill the container's width */
+  /* max-width: 600px; /* Optional: if you want to cap board size directly here */
+  /* The .game-area parent already has max-width handling */
+}
+/* ConnectionManager Styles */
+.connection-manager {
+  padding: 1.5rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+.cm-title {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.5rem;
+}
+
+.cm-status-section p,
+.cm-info-section p,
+.cm-game-active-info p {
+  margin: 0.4rem 0;
+  font-size: 0.9rem;
+}
+
+.cm-status-section .cm-status strong,
+.cm-info-section p strong,
+.cm-game-active-info p strong {
+  color: #555;
+}
+
+.cm-status .status-awaiting-connection { color: #e67e22; } /* Orange */
+.cm-status .status-setting-up { color: #3498db; } /* Blue */
+.cm-status .status-in-progress { color: #2ecc71; } /* Green */
+.cm-status .status-connected { color: #2ecc71; } /* Green */
+.cm-status .status-disconnected { color: #e74c3c; } /* Red */
+.cm-status .status-disconnected-opponent-left { color: #c0392b; } /* Darker Red */
+.cm-status .status-connection-lost-attempting-reconnect { color: #f39c12; } /* Yellow-Orange */
+.cm-status .status-opponent-reconnected-awaiting-sync { color: #1abc9c; } /* Turquoise */
+.cm-status .status-resynchronizing-game-state { color: #9b59b6; } /* Purple */
+.cm-status .status-resynchronization-successful { color: #27ae60; } /* Darker Green */
+.cm-status .status-resynchronization-failed { color: #e74c3c; } /* Red */
+
+
+.cm-error {
+  color: #e74c3c; /* Red */
+  font-weight: bold;
+  padding: 0.5rem;
+  border: 1px solid #e74c3c;
+  border-radius: 4px;
+  background-color: #fdd;
+  margin-top: 0.5rem;
+}
+
+.cm-peer-id, .cm-game-id {
+  font-family: monospace;
+  background-color: #eee;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+}
+
+.cm-actions-section {
+  margin-top: 1rem;
+}
+
+.cm-join-group {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.cm-input.cm-input-join-id {
+  flex-grow: 1;
+  margin-right: 0.5rem;
+  margin-bottom: 0; /* Override general input margin */
+}
+
+.cm-button {
+  width: 100%; /* Make buttons full width of their container by default */
+  box-sizing: border-box;
+}
+
+.cm-join-group .cm-button-join {
+  width: auto; /* Allow join button to size to content */
+  flex-shrink: 0;
+}
+
+.cm-button-host {
+  background-color: #2ecc71; /* Green */
+}
+.cm-button-host:hover {
+  background-color: #27ae60;
+}
+
+.cm-button-leave {
+  background-color: #e74c3c; /* Red */
+}
+.cm-button-leave:hover {
+  background-color: #c0392b;
+}
+
+.cm-connected-success {
+  color: #27ae60; /* Darker Green */
+  margin-top: 0.5rem;
+}
+
+.cm-game-active-info {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+/* StatusDisplay Styles */
+.status-display {
+  padding: 1rem 1.5rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  margin-bottom: 1rem; /* Space below status before board */
+  text-align: center;
+}
+
+.sd-title {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-size: 1.15rem;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.5rem;
+}
+
+.sd-status-text {
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin-bottom: 0.75rem;
+  min-height: 1.5em; /* Ensure space even if text is short */
+}
+
+/* Specific colors for status text can be added here if desired, similar to ConnectionManager */
+/* For example: */
+.sd-status-text strong[data-status*="checkmate"],
+.sd-status-text strong[data-status*="wins"],
+.sd-status-text strong[data-status*="resigned"] {
+  color: #e74c3c; /* Red for game end */
+}
+.sd-status-text strong[data-status*="draw"] {
+  color: #f39c12; /* Orange for draw */
+}
+.sd-status-text strong[data-status*="check"] {
+  color: #e67e22; /* Darker orange for check */
+}
+
+
+.sd-info-grid {
+  display: grid;
+  grid-template-columns: 1fr; /* Stack on small screens */
+  gap: 0.25rem 1rem;
+  font-size: 0.85rem;
+  color: #555;
+  margin-top: 0.5rem;
+}
+
+@media (min-width: 480px) {
+  .sd-info-grid {
+    grid-template-columns: 1fr 1fr; /* Side-by-side on larger screens */
+  }
+}
+
+.sd-player-info,
+.sd-connection-info {
+  margin: 0.2rem 0;
+  padding: 0.3rem;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+}
+
+.sd-check-indicator {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #e74c3c; /* Red for CHECK */
+  margin-top: 0.5rem;
+  animation: blink-animation 1s infinite;
+}
+
+@keyframes blink-animation {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+/* PromotionChoice Styles */
+.promotion-choice-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6); /* Darker, slightly more transparent overlay */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; /* Ensure it's on top */
+}
+
+.promotion-choice-dialog {
+  background-color: #ffffff;
+  padding: 1.5rem 2rem;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pc-title {
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.pc-button-group {
+  display: flex;
+  gap: 0.75rem; /* Space between buttons */
+}
+
+.pc-button {
+  background-color: #4a5568; /* Dark grey-blue */
+  color: white;
+  border: 2px solid #2d3748; /* Darker border */
+  padding: 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 70px; /* Ensure buttons have some width */
+}
+
+.pc-button:hover {
+  background-color: #2d3748; /* Darker on hover */
+  transform: translateY(-2px);
+}
+
+.pc-piece-unicode {
+  font-size: 2.5em; /* Larger unicode piece */
+  line-height: 1;
+}
+
+.pc-piece-name {
+  font-size: 0.7rem;
+  margin-top: 0.3rem;
+  text-transform: uppercase;
+  color: #cbd5e0; /* Lighter text for name */
+}
+
+.pc-button:hover .pc-piece-name {
+  color: #e2e8f0;
+}

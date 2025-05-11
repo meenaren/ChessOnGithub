@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
+import NavBar from './components/NavBar'; // Added NavBar import
 import useGameConnection from './hooks/useGameConnection';
 import ConnectionManager from './components/ConnectionManager';
 import Board from './components/Board';
@@ -395,27 +396,27 @@ function App() {
 
   return (
     <div className="App">
-      <header className="App-header">
-        <h1>Chess On GitHub</h1>
-      </header>
-      <main>
-        <ConnectionManager
-          peerId={peerId}
-          gameId={gameState.gameId}
-          isConnected={isConnected}
-          isHost={gameState.isHost}
-          connectionStatus={connectionStatus} // from useGameConnection
-          onHostGame={handleHostGame}
-          onJoinGame={handleJoinGame}
-          onLeaveGame={leaveGame}
-          error={error}
-          opponentPeerId={gameState.opponentPeerId} // Pass down opponentPeerId
-          assignedColor={gameState.localPlayerColor}
-        />
+      <NavBar /> {/* Added NavBar component */}
+      <main className="app-main-content">
+        <div className="content-section connection-manager-section">
+          <ConnectionManager
+            peerId={peerId}
+            gameId={gameState.gameId}
+            isConnected={isConnected}
+            isHost={gameState.isHost}
+            connectionStatus={connectionStatus} // from useGameConnection
+            onHostGame={handleHostGame}
+            onJoinGame={handleJoinGame}
+            onLeaveGame={leaveGame}
+            error={error}
+            opponentPeerId={gameState.opponentPeerId} // Pass down opponentPeerId
+            assignedColor={gameState.localPlayerColor}
+          />
+        </div>
 
         {/* Show board and status if game is active, or if attempting/undergoing resync */}
         {(isConnected || gameState.status === GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT || gameState.status === GameStatus.RESYNCHRONIZING_GAME_STATE) && gameState.localPlayerColor && (
-          <>
+          <div className="content-section game-area">
             <StatusDisplay
               currentTurn={gameState.currentTurn}
               // Pass connectionStatus from hook for more detailed P2P status, and gameState.status for game logic status
@@ -426,25 +427,30 @@ function App() {
               isHost={gameState.isHost}
               gameId={gameState.gameId}
             />
-            <Board
-              gameFen={gameState.fen}
-              onPieceDrop={handlePieceDrop}
-              boardOrientation={gameState.localPlayerColor}
-              arePiecesDraggable={isConnected && gameState.currentTurn === gameState.localPlayerColor && !promotionPendingData && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK || gameState.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL)}
-            />
-            {(isConnected && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK)) && !promotionPendingData && (
-                 <button onClick={handleResign} style={{marginTop: '10px'}}>Resign</button>
-            )}
+            <div className="board-container"> {/* Added board-container for specific board styling if needed */}
+              <Board
+                gameFen={gameState.fen}
+                onPieceDrop={handlePieceDrop}
+                boardOrientation={gameState.localPlayerColor}
+                arePiecesDraggable={isConnected && gameState.currentTurn === gameState.localPlayerColor && !promotionPendingData && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK || gameState.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL)}
+              />
+            </div>
+            {(isConnected && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK)) && !promotionPendingData &&
+                 <button onClick={handleResign} className="mt-1">Resign</button>
+            }
             {promotionPendingData && gameState.localPlayerColor && (
               <PromotionChoice
                 onSelect={handlePromotionSelect}
                 playerColor={gameState.localPlayerColor}
               />
             )}
-          </>
+          </div>
         )}
-        { !isConnected && gameState.status !== GameStatus.AWAITING_CONNECTION && gameState.status !== GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT && <p>Disconnected. Please host or join a game.</p>}
-
+        { !isConnected && gameState.status !== GameStatus.AWAITING_CONNECTION && gameState.status !== GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT && (
+            <div className="content-section text-center">
+                 <p>Disconnected. Please host or join a game.</p>
+            </div>
+        )}
       </main>
     </div>
   );
