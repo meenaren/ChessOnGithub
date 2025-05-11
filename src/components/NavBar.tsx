@@ -33,7 +33,7 @@ const NavBar: React.FC<NavBarProps> = ({
 }) => {
   return (
     <nav className="navbar">
-      <div className="navbar-title">ChessOnGithub</div>
+      <img src="logo.png" alt="ChessP2P Logo" className="navbar-logo" />
       <div className="navbar-game-status">
         <strong>{gameDisplayStatus}</strong>
       </div>

@@ -39,6 +39,15 @@ body {
   min-height: 50px; /* Ensure a minimum height */
 }
 
+.navbar-logo {
+  display: block;
+  width: 100px;
+  height: 100px;
+  opacity: 1;
+  visibility: visible;
+  margin-right: 1rem; /* Add some space between logo and title */
+}
+
 .navbar-title {
   font-size: 1.4rem; /* Slightly adjusted size */
   font-weight: 600; /* Slightly less bold */
