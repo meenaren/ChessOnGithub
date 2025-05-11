@@ -4,10 +4,17 @@ import useGameConnection from './hooks/useGameConnection';
 import ConnectionManager from './components/ConnectionManager';
 import Board from './components/Board';
 import StatusDisplay from './components/StatusDisplay';
+import PromotionChoice from './components/PromotionChoice'; // Added
 import * as gameLogic from './modules/gameLogic';
-import type { AppGameState, PlayerColor, Move as AppMove, AnyP2PMessage, GameStateUpdatePayload, MovePayload, InitialGameSetupPayload, InitialGameSetupMessage } from './utils/types';
-import { P2PMessageKeyEnum, GameStatus } from './utils/types';
-import type { Square } from 'chess.js';
+import type { AppGameState, PlayerColor, Move as AppMove, AnyP2PMessage, GameStateUpdatePayload, MovePayload, InitialGameSetupPayload, InitialGameSetupMessage, PieceSymbol as AppPieceSymbol } from './utils/types'; // Added AppPieceSymbol
+import { P2PMessageKeyEnum, GameStatus, PieceSymbol } from './utils/types'; // Added PieceSymbol
+import { Chess, type Square } from 'chess.js'; // Imported Chess directly
+
+interface PromotionPendingData {
+  from: Square;
+  to: Square;
+  pieceString: string; // e.g. 'wP'
+}
 
 function App() {
   const {
@@ -31,6 +38,9 @@ function App() {
       winner: null,
     };
   });
+
+  const [promotionPendingData, setPromotionPendingData] = useState<PromotionPendingData | null>(null);
+
 
   // Effect to handle received P2P messages
   useEffect(() => {
@@ -178,24 +188,46 @@ function App() {
   };
 
   const handlePieceDrop = (sourceSquare: Square, targetSquare: Square, pieceString: string): boolean => {
+    if (promotionPendingData) return false; // Don't allow new moves if promotion is pending
+
     if (!isConnected || gameState.localPlayerColor === null || gameState.currentTurn !== gameState.localPlayerColor || gameState.status !== GameStatus.IN_PROGRESS && gameState.status !== GameStatus.WHITE_IN_CHECK && gameState.status !== GameStatus.BLACK_IN_CHECK) {
       console.log("Cannot make move: Not your turn or game not in progress.");
       return false;
     }
 
-    // pieceString is like 'wP', 'bN'. gameLogic.makeMove needs {from, to, promotion}
-    // Promotion needs to be handled if it's a pawn reaching the last rank.
-    // For now, basic move without promotion UI.
     const pieceColor = pieceString[0] as PlayerColor;
+    const pieceType = pieceString[1].toLowerCase() as AppPieceSymbol;
+
     if (pieceColor !== gameState.localPlayerColor) {
         console.log("Cannot move opponent's piece.");
-        return false; // Trying to move opponent's piece
+        return false;
     }
 
-    const moveAttempt: AppMove = { from: sourceSquare, to: targetSquare, promotion: null }; // Add promotion as null initially
-    // TODO: Add promotion handling logic here if a pawn reaches the promotion rank.
-    // For now, assume no promotion or handle it in gameLogic if it can infer.
+    // Check for promotion
+    const isPawn = pieceType === PieceSymbol.PAWN;
+    const promotionRank = pieceColor === 'w' ? '8' : '1';
+    const isPromotion = isPawn && targetSquare[1] === promotionRank;
 
+    if (isPromotion) {
+      // Check if the move is valid up to the promotion point using chess.js
+      // This is a light check; gameLogic.makeMove will do the full validation.
+      const tempChess = new Chess(gameState.fen); // Use imported Chess
+      const possibleMoves = tempChess.moves({ square: sourceSquare, verbose: true });
+      const isPotentiallyValidPromotion = possibleMoves.some(
+        (m: any) => m.to === targetSquare && (m.flags.includes('p') || m.flags.includes('pc')) // 'p' for promotion, 'pc' for promotion capture
+      );
+
+      if (isPotentiallyValidPromotion) {
+        setPromotionPendingData({ from: sourceSquare, to: targetSquare, pieceString });
+        return false; // Prevent react-chessboard from making the move, wait for user choice
+      } else {
+        console.log("Invalid pawn promotion attempt (pre-check failed).");
+        return false; // Not a valid square for the pawn to move to for promotion
+      }
+    }
+
+    // Regular move
+    const moveAttempt: AppMove = { from: sourceSquare, to: targetSquare, promotion: null };
     const moveResult = gameLogic.makeMove(gameState.fen, moveAttempt);
 
     if (moveResult) {
@@ -208,7 +240,6 @@ function App() {
         winner: newLogicState.winner,
       }));
 
-      // Send move to opponent
       const movePayload: MovePayload = {
         from: sourceSquare,
         to: targetSquare,
@@ -218,9 +249,39 @@ function App() {
       return true;
     } else {
       console.log("Invalid move attempted by local player:", moveAttempt);
-      // Optionally provide feedback to the user about invalid move
       return false;
     }
+  };
+
+  const handlePromotionSelect = (selectedPiece: Exclude<AppPieceSymbol, 'p' | 'k'>) => {
+    if (!promotionPendingData || !gameState.localPlayerColor) return;
+
+    const { from, to } = promotionPendingData;
+    const moveWithPromotion: AppMove = { from, to, promotion: selectedPiece };
+    
+    const moveResult = gameLogic.makeMove(gameState.fen, moveWithPromotion);
+
+    if (moveResult) {
+      const newLogicState = gameLogic.getGameStatus(moveResult.newFen);
+      setGameState(prev => ({
+        ...prev,
+        fen: moveResult.newFen,
+        currentTurn: newLogicState.turn,
+        status: newLogicState.appStatus,
+        winner: newLogicState.winner,
+      }));
+
+      const movePayload: MovePayload = {
+        from,
+        to,
+        promotion: selectedPiece,
+      };
+      sendGameData({ type: P2PMessageKeyEnum.MOVE, payload: movePayload });
+    } else {
+      console.error("Error completing promotion move:", moveWithPromotion);
+      // Handle error, perhaps reset UI or notify user
+    }
+    setPromotionPendingData(null); // Clear pending promotion
   };
   
   const handleResign = () => {
@@ -270,10 +331,16 @@ function App() {
               gameFen={gameState.fen}
               onPieceDrop={handlePieceDrop}
               boardOrientation={gameState.localPlayerColor}
-              arePiecesDraggable={isConnected && gameState.currentTurn === gameState.localPlayerColor && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK)}
+              arePiecesDraggable={isConnected && gameState.currentTurn === gameState.localPlayerColor && !promotionPendingData && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK)}
             />
-            {(gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK) && (
+            {(gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK) && !promotionPendingData && (
                  <button onClick={handleResign} style={{marginTop: '10px'}}>Resign</button>
+            )}
+            {promotionPendingData && gameState.localPlayerColor && (
+              <PromotionChoice
+                onSelect={handlePromotionSelect}
+                playerColor={gameState.localPlayerColor}
+              />
             )}
           </>
         )}
