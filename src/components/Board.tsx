@@ -1,5 +1,5 @@
 import React from 'react';
-import { Chessboard } from 'react-chessboard';
+import { Chessboard } from 'react-chessboard'; // Removed PromotionPieceOption import
 import type { Square } from 'chess.js'; // chess.js Square type is string
 import type { PlayerColor } from '../utils/types';
 
@@ -8,6 +8,11 @@ interface BoardProps {
   onPieceDrop: (sourceSquare: Square, targetSquare: Square, piece: string) => boolean; // Return true if move is valid, false otherwise
   boardOrientation: PlayerColor; // 'white' or 'black'
   arePiecesDraggable: boolean;
+  onPromotionPieceSelect: (
+    piece?: string, // Changed to string | undefined to be more general
+    promoteFromSquare?: Square,
+    promoteToSquare?: Square
+  ) => boolean; // This is the correct signature for react-chessboard's prop
   // Potentially add custom square styles for highlighting last move or checks
   // customSquareStyles?: { [square: string]: React.CSSProperties };
 }
@@ -17,6 +22,7 @@ const Board: React.FC<BoardProps> = ({
   onPieceDrop,
   boardOrientation,
   arePiecesDraggable,
+  onPromotionPieceSelect, // Added
   // customSquareStyles = {},
 }) => {
   const handlePieceDrop = (
@@ -38,6 +44,7 @@ const Board: React.FC<BoardProps> = ({
         onPieceDrop={handlePieceDrop}
         boardOrientation={boardOrientation === 'w' ? 'white' : 'black'}
         arePiecesDraggable={arePiecesDraggable}
+        onPromotionPieceSelect={onPromotionPieceSelect} // Added prop
         // customSquareStyles={customSquareStyles}
         // id="PlayVsPlay" // Default or custom ID
         // animationDuration={200}
