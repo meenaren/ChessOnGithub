@@ -1,6 +1,6 @@
 import { Chess, type Square, type PieceSymbol, type Move as ChessJsMove } from 'chess.js';
-import { GameStatus as AppGameStatus } from '../utils/types';
-import type { PlayerColor, Move as AppMove } from '../utils/types';
+import { GameStatus as AppGameStatus, DrawType } from '../utils/types';
+import type { PlayerColor, Move as AppMove, DrawType as AppDrawType } from '../utils/types';
 
 // Helper to convert chess.js color to our PlayerColor
 const toPlayerColor = (chessJsColor: 'w' | 'b'): PlayerColor => chessJsColor;
@@ -17,8 +17,8 @@ export interface GameLogicState {
   isDraw: boolean; // Covers stalemate, threefold repetition, fifty-move rule, insufficient material
   isGameOver: boolean;
   winner: PlayerColor | 'draw' | null;
-  // Add more specific status if needed, like from AppGameStatus
   appStatus: AppGameStatus;
+  drawType: AppDrawType; // Added for specific draw type
 }
 
 /**
@@ -82,13 +82,11 @@ export const getGameStatus = (fen: string): GameLogicState => {
   const isThreefoldRepetition = chess.isThreefoldRepetition();
   const isInsufficientMaterial = chess.isInsufficientMaterial();
   // isDraw() checks for 50-move, threefold, and insufficient material
-  const isDrawByRule = chess.isDraw(); // This covers 50-move, threefold, and insufficient material.
+  const isChessJsDraw = chess.isDraw(); // General draw flag from chess.js
 
-  const isDraw = isStalemate || isDrawByRule; // Combine stalemate with other draw conditions
-  const isGameOver = isCheckmate || isDraw;
-  
   let winner: PlayerColor | 'draw' | null = null;
   let appStatus: AppGameStatus;
+  let drawType: AppDrawType = null;
 
   if (isCheckmate) {
     winner = turn === 'w' ? 'b' : 'w'; // If it's white's turn and checkmate, black wins
@@ -96,34 +94,41 @@ export const getGameStatus = (fen: string): GameLogicState => {
   } else if (isStalemate) {
     winner = 'draw';
     appStatus = AppGameStatus.STALEMATE_DRAW;
-  } else if (isDrawByRule) { // If chess.isDraw() is true, determine specific reason
+    drawType = DrawType.STALEMATE;
+  } else if (isThreefoldRepetition) { // Check specific draw conditions first
     winner = 'draw';
-    if (isThreefoldRepetition) {
-      appStatus = AppGameStatus.DRAW_BY_THREEFOLD_REPETITION;
-    } else if (isInsufficientMaterial) {
-      appStatus = AppGameStatus.DRAW_BY_INSUFFICIENT_MATERIAL;
-    } else {
-      // If isDraw() is true but not stalemate, threefold, or insufficient material,
-      // it must be the 50-move rule (or a less common draw type not explicitly checked here).
-      // chess.js's isDraw() is comprehensive.
-      appStatus = AppGameStatus.DRAW_BY_FIFTY_MOVE_RULE; // Default to 50-move if other specific draws aren't met
-    }
+    appStatus = AppGameStatus.DRAW_BY_THREEFOLD_REPETITION;
+    drawType = DrawType.THREEFOLD_REPETITION;
+  } else if (isInsufficientMaterial) {
+    winner = 'draw';
+    appStatus = AppGameStatus.DRAW_BY_INSUFFICIENT_MATERIAL;
+    drawType = DrawType.INSUFFICIENT_MATERIAL;
+  } else if (isChessJsDraw) { // If chess.js says it's a draw, and not one of the above specific ones
+    winner = 'draw';
+    // This primarily catches the fifty-move rule if not explicitly handled by isThreefoldRepetition or isInsufficientMaterial
+    appStatus = AppGameStatus.DRAW_BY_FIFTY_MOVE_RULE;
+    drawType = DrawType.FIFTY_MOVE_RULE;
   } else if (isCheck) {
     appStatus = turn === 'w' ? AppGameStatus.WHITE_IN_CHECK : AppGameStatus.BLACK_IN_CHECK;
   } else {
     appStatus = AppGameStatus.IN_PROGRESS;
   }
 
+  // Recalculate isDraw and isGameOver based on the determined state
+  const isDraw = winner === 'draw';
+  const isGameOver = isCheckmate || isDraw;
+
   return {
     fen,
     turn,
     isCheck,
     isCheckmate,
-    isStalemate,
-    isDraw,
+    isStalemate, // Retain for direct checking if needed, though drawType is more specific
+    isDraw,       // Overall draw status
     isGameOver,
     winner,
     appStatus,
+    drawType,     // Specific type of draw
   };
 };
 

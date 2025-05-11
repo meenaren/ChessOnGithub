@@ -14,9 +14,10 @@ import type {
   PieceSymbol as AppPieceSymbol,
   SyncGameStatePayload, // Added
   RequestGameStateMessage as AppRequestGameStateMessage, // Added with alias
-  SyncGameStateMessage as AppSyncGameStateMessage // Added with alias
+  SyncGameStateMessage as AppSyncGameStateMessage, // Added with alias
+  DrawType as AppDrawType // Added DrawType
 } from './utils/types';
-import { P2PMessageKeyEnum, GameStatus, PieceSymbol } from './utils/types';
+import { P2PMessageKeyEnum, GameStatus, PieceSymbol, DrawType } from './utils/types'; // Added DrawType
 import { Chess, type Square, type Piece } from 'chess.js'; // Added Piece type
 
 // interface PromotionPendingData { // Removed
@@ -42,10 +43,13 @@ function App() {
       opponentPeerId: null,
       isHost: null,
       status: GameStatus.AWAITING_CONNECTION,
+      isCheck: initialLogicState.isCheck,
+      isCheckmate: initialLogicState.isCheckmate,
       castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } },
       enPassantTarget: null,
       winner: null,
       moveHistory: [], // Added moveHistory
+      drawType: null, // Initialize drawType
     };
   });
 
@@ -68,6 +72,9 @@ function App() {
               fen: setupPayload.startingFen,
               currentTurn: logicState.turn,
               status: logicState.appStatus,
+              isCheck: logicState.isCheck,
+              isCheckmate: logicState.isCheckmate,
+              drawType: logicState.drawType, // Add drawType
               localPlayerColor: peerId === setupPayload.playerWhite ? 'w' : 'b',
               opponentPeerId: isHost ? prev.opponentPeerId : (peerId === setupPayload.playerWhite ? setupPayload.playerBlack : setupPayload.playerWhite),
             }));
@@ -89,7 +96,10 @@ function App() {
                   fen: moveResult.newFen,
                   currentTurn: newLogicState.turn,
                   status: newLogicState.appStatus,
+                  isCheck: newLogicState.isCheck,
+                  isCheckmate: newLogicState.isCheckmate,
                   winner: newLogicState.winner,
+                  drawType: newLogicState.drawType, // Add drawType
                   moveHistory: [...prev.moveHistory, appMove], // Add to history
                 }));
               } else {
@@ -113,7 +123,10 @@ function App() {
               fen: updatePayload.fen,
               currentTurn: logicState.turn,
               status: logicState.appStatus, // Use appStatus from logic
+              isCheck: logicState.isCheck,
+              isCheckmate: logicState.isCheckmate,
               winner: logicState.winner,
+              drawType: logicState.drawType, // Add drawType
               // moveHistory might be out of sync here, SYNC_GAME_STATE is better
             }));
           }
@@ -151,7 +164,10 @@ function App() {
               fen: syncPayload.fen,
               currentTurn: syncPayload.turn, // Use turn from payload
               status: logicState.appStatus, // Use appStatus from logic based on synced FEN
+              isCheck: logicState.isCheck,
+              isCheckmate: logicState.isCheckmate,
               winner: logicState.winner,
+              drawType: logicState.drawType, // Add drawType
               moveHistory: syncPayload.moveHistory || [], // Ensure moveHistory is an array
               // Potentially update localPlayerColor if IDs match, but this should be stable
               localPlayerColor: prev.localPlayerColor || (peerId === syncPayload.playerWhiteId ? 'w' : (peerId === syncPayload.playerBlackId ? 'b' : null)),
@@ -164,7 +180,7 @@ function App() {
                 // Transition back to IN_PROGRESS or the actual game status after a short delay
                 setTimeout(() => {
                     const currentLogicState = gameLogic.getGameStatus(syncPayload.fen);
-                    setGameState(prev => ({ ...prev, status: currentLogicState.appStatus }));
+                    setGameState(prev => ({ ...prev, status: currentLogicState.appStatus, isCheck: currentLogicState.isCheck, isCheckmate: currentLogicState.isCheckmate, drawType: currentLogicState.drawType }));
                 }, 1500);
             }, 500);
           }
@@ -174,6 +190,9 @@ function App() {
             ...prev,
             status: prev.localPlayerColor === 'w' ? GameStatus.RESIGNATION_BLACK_WINS : GameStatus.RESIGNATION_WHITE_WINS,
             winner: prev.localPlayerColor === 'w' ? 'b' : 'w',
+            isCheck: false, // No check/checkmate in resignation
+            isCheckmate: false,
+            drawType: null, // No draw in resignation
           }));
           break;
         // Add other cases like DRAW_OFFER, DRAW_ACCEPT if implemented
@@ -232,6 +251,9 @@ function App() {
             currentTurn: 'w', // Host (White) starts
             localPlayerColor: 'w', // Host is White
             status: initialLogicState.appStatus, // Should be IN_PROGRESS
+            isCheck: initialLogicState.isCheck,
+            isCheckmate: initialLogicState.isCheckmate,
+            drawType: initialLogicState.drawType, // Add drawType
             opponentPeerId: opponentPeerId, // from hook
             isHost: true,
         }));
@@ -261,6 +283,9 @@ function App() {
       opponentPeerId: null,
       isHost: true,
       status: GameStatus.AWAITING_CONNECTION, // Waiting for opponent
+      isCheck: initialLogicState.isCheck,
+      isCheckmate: initialLogicState.isCheckmate,
+      drawType: initialLogicState.drawType, // Add drawType
       castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } },
       enPassantTarget: null,
       winner: null,
@@ -329,7 +354,10 @@ function App() {
         fen: moveResult.newFen,
         currentTurn: newLogicState.turn,
         status: newLogicState.appStatus,
+        isCheck: newLogicState.isCheck,
+        isCheckmate: newLogicState.isCheckmate,
         winner: newLogicState.winner,
+        drawType: newLogicState.drawType, // Add drawType
         moveHistory: [...prev.moveHistory, moveAttempt],
       }));
 
@@ -415,7 +443,10 @@ function App() {
         fen: moveResult.newFen,
         currentTurn: newLogicState.turn,
         status: newLogicState.appStatus,
+        isCheck: newLogicState.isCheck,
+        isCheckmate: newLogicState.isCheckmate,
         winner: newLogicState.winner,
+        drawType: newLogicState.drawType, // Add drawType
         moveHistory: [...prev.moveHistory, moveWithPromotion],
       }));
 
@@ -439,6 +470,9 @@ function App() {
             ...prev,
             status: prev.localPlayerColor === 'w' ? GameStatus.RESIGNATION_WHITE_WINS : GameStatus.RESIGNATION_BLACK_WINS,
             winner: prev.localPlayerColor === 'w' ? 'b' : 'w', // Opponent wins
+            isCheck: false, // No check/checkmate in resignation
+            isCheckmate: false,
+            drawType: null, // No draw in resignation
         }));
     }
   };
@@ -476,6 +510,10 @@ function App() {
               isConnected={isConnected}
               isHost={gameState.isHost}
               gameId={gameState.gameId}
+              isCheck={gameState.isCheck}
+              isCheckmate={gameState.isCheckmate}
+              winner={gameState.winner}
+              drawType={gameState.drawType} // Pass drawType
             />
             <div className="board-container"> {/* Added board-container for specific board styling if needed */}
               <Board

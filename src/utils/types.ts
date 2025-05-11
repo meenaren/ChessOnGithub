@@ -54,6 +54,14 @@ export const GameStatus = {
 } as const;
 export type GameStatus = typeof GameStatus[keyof typeof GameStatus];
 
+export const DrawType = {
+  STALEMATE: 'STALEMATE',
+  THREEFOLD_REPETITION: 'THREEFOLD_REPETITION',
+  INSUFFICIENT_MATERIAL: 'INSUFFICIENT_MATERIAL',
+  FIFTY_MOVE_RULE: 'FIFTY_MOVE_RULE',
+} as const;
+export type DrawType = typeof DrawType[keyof typeof DrawType] | null;
+
 export type Square = string;
 
 export interface Move extends JsonObject { // Must conform to JsonObject
@@ -77,8 +85,11 @@ export interface CastlingRights extends JsonObject { // Must conform to JsonObje
 export interface AppGameState {
   gameId: string | null; fen: string; currentTurn: PlayerColor; localPlayerColor: PlayerColor | null;
   opponentPeerId: string | null; isHost: boolean | null; status: GameStatus;
+  isCheck: boolean;      // Added for explicit check status
+  isCheckmate: boolean;  // Added for explicit checkmate status
   castlingRights: CastlingRights; enPassantTarget: Square | null; winner: PlayerColor | 'draw' | null;
   moveHistory: Move[]; // Added for game state synchronization
+  drawType: DrawType; // New field for specific draw condition
 }
 
 // --- P2P Message Payloads ---
