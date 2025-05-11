@@ -125,6 +125,58 @@ body {
   background-color: rgba(149, 165, 166, 0.2); /* Greyish for draw */
   color: #95a5a6;
 }
+/* Responsive adjustments for NavBar */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column; /* Stack items vertically */
+    align-items: center; /* Center items horizontally */
+    padding: 0.75rem 1rem; /* Adjust padding for stacked layout */
+  }
+
+  .navbar-title {
+    margin-right: 0; /* Remove auto margin */
+    margin-bottom: 0.5rem; /* Space below title */
+    font-size: 1.3rem; /* Adjust font size */
+    text-align: center; /* Ensure title is centered */
+  }
+
+  .navbar-game-status {
+    flex-grow: 0; /* Reset flex-grow */
+    margin-bottom: 0.5rem; /* Space below game status */
+    font-size: 1.1rem; /* Adjust font size */
+    text-align: center; /* Ensure game status is centered */
+  }
+
+  .navbar-connection-status {
+    white-space: normal; /* Allow text to wrap */
+    text-align: center; /* Center connection status text */
+    font-size: 0.9rem; /* Adjust font size */
+    padding: 0.4rem 0.8rem; /* Adjust padding */
+  }
+
+  .navbar-connection-status .navbar-status-details {
+    display: block; /* Make room ID appear on a new line if needed */
+    margin-left: 0; /* Reset margin */
+    margin-top: 0.25rem; /* Add some space above room ID */
+    font-size: 0.8rem; /* Adjust font size for details */
+  }
+}
+
+/* Further adjustments for very small screens if needed */
+@media (max-width: 480px) {
+  .navbar-title {
+    font-size: 1.2rem;
+  }
+  .navbar-game-status {
+    font-size: 1rem;
+  }
+  .navbar-connection-status {
+    font-size: 0.85rem;
+  }
+   .navbar-connection-status .navbar-status-details {
+    font-size: 0.75rem;
+  }
+}
 /* Main Content Area */
 .app-main-content {
   flex-grow: 1; /* Allows main content to fill available space */
