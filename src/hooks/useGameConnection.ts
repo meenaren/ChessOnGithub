@@ -30,7 +30,7 @@ export interface UseGameConnectionReturn {
   isHost: boolean | null;
   gameId: string | null;
   assignedColor: PlayerColor | null;
-  connectionStatus: string;
+  connectionStatus: GameStatus;
   hostGame: () => string;
   joinGame: (roomId: string) => void;
   sendGameData: (data: AnyP2PMessage) => void;
@@ -49,7 +49,7 @@ const useGameConnection = (): UseGameConnectionReturn => {
   const [isHost, setIsHost] = useState<boolean | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
   const [assignedColor, setAssignedColor] = useState<PlayerColor | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<GameStatus | string>(GameStatus.AWAITING_CONNECTION); // Use GameStatus enum
+  const [connectionStatus, setConnectionStatus] = useState<GameStatus>(GameStatus.AWAITING_CONNECTION);
   const [receivedData, setReceivedData] = useState<AnyP2PMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +84,7 @@ const useGameConnection = (): UseGameConnectionReturn => {
       cleanup(); 
     }
 
-    setConnectionStatus(hostStatus ? GameStatus.SETTING_UP : `Attempting to join game ID: ${currentRoomId}...`);
+    setConnectionStatus(GameStatus.SETTING_UP); // Standard status for initialization phase
     setError(null);
     if (reconnectAttemptTimerRef.current) {
       clearTimeout(reconnectAttemptTimerRef.current);
@@ -160,7 +160,7 @@ const useGameConnection = (): UseGameConnectionReturn => {
           // Client might send REQUEST_GAME_STATE if no SYNC_GAME_STATE is received soon
         } else if (!isConnected) {
            // Initial connection to a room, waiting for host's CONNECTION_CONFIRMED
-          setConnectionStatus(`Connected to room. Waiting for host confirmation...`);
+          setConnectionStatus(GameStatus.SETTING_UP); // Waiting for host's confirmation and game setup
         }
       }
     });

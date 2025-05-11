@@ -32,16 +32,99 @@ body {
   background-color: #2c3e50; /* Darker, more professional blue/grey */
   color: white;
   padding: 0.8rem 1.5rem; /* Adjusted padding */
-  text-align: left; /* Align title to the left */
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  /* margin-bottom: 1rem; /* Removed, main content will handle its own margin/padding */
+  display: flex;
+  justify-content: space-between; /* Distributes space: title left, game status center, connection right */
+  align-items: center; /* Vertically align items in the center */
+  min-height: 50px; /* Ensure a minimum height */
 }
 
 .navbar-title {
   font-size: 1.4rem; /* Slightly adjusted size */
   font-weight: 600; /* Slightly less bold */
+  margin-right: auto; /* Pushes other elements to the right, but game status will take center */
 }
 
+.navbar-game-status {
+  flex-grow: 1; /* Allows game status to take available space in the center */
+  text-align: center; /* Center the text within its container */
+  font-size: 1.1rem; /* Prominent font size */
+  font-weight: bold;
+  /* Optional: Add some horizontal margin if title/connection status are too close */
+  /* margin: 0 1rem; */
+}
+
+.navbar-game-status strong {
+    /* Styles for specific game states can be added here if needed, e.g., color for "Check!" */
+    /* Example: */
+    /* &.check { color: #e67e22; } */
+    /* &.checkmate { color: #e74c3c; } */
+}
+
+
+.navbar-connection-status {
+  font-size: 0.9rem;
+  /* margin-left: auto; /* No longer needed as flexbox handles positioning */
+  padding: 0.3rem 0.6rem; /* Slightly increased padding for better appearance */
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.1); /* Subtle background */
+  text-align: right; /* Ensure text within connection status is right-aligned if it wraps */
+  white-space: nowrap; /* Prevent connection status from wrapping if possible */
+}
+
+.navbar-connection-status .navbar-status-details {
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+  opacity: 0.8;
+}
+
+/* Specific status colors for NavBar - can mirror .cm-status if needed or be simpler */
+.navbar-connection-status.status-awaiting-connection,
+.navbar-connection-status.status-establishing-connection,
+.navbar-connection-status.status-setting-up-room {
+  background-color: rgba(230, 126, 34, 0.2); /* Orange-ish tint */
+  color: #e67e22;
+}
+
+.navbar-connection-status.status-connected,
+.navbar-connection-status.status-game-synced,
+.navbar-connection-status.status-in-progress { /* Assuming IN_PROGRESS from hook means connected */
+  background-color: rgba(46, 204, 113, 0.2); /* Greenish tint */
+  color: #2ecc71;
+}
+
+.navbar-connection-status.status-reconnecting,
+.navbar-connection-status.status-opponent-reconnected-syncing,
+.navbar-connection-status.status-syncing-game {
+  background-color: rgba(243, 156, 18, 0.2); /* Yellow-ish tint */
+  color: #f39c12;
+}
+
+.navbar-connection-status.status-connection-failed,
+.navbar-connection-status.status-opponent-left,
+.navbar-connection-status.status-disconnected { /* Generic disconnected if hook uses it */
+  background-color: rgba(231, 76, 60, 0.2); /* Reddish tint */
+  color: #e74c3c;
+}
+
+/* Game outcome specific colors */
+.navbar-connection-status.status-white-wins,
+.navbar-connection-status.status-black-wins,
+.navbar-connection-status.status-opponent-resigned-white-wins,
+.navbar-connection-status.status-opponent-resigned-black-wins,
+.navbar-connection-status.status-you-resigned-white-wins,
+.navbar-connection-status.status-you-resigned-black-wins {
+  background-color: rgba(52, 152, 219, 0.2); /* Blueish for game end */
+  color: #3498db;
+}
+.navbar-connection-status.status-draw-stalemate,
+.navbar-connection-status.status-draw-insufficient-material,
+.navbar-connection-status.status-draw-repetition,
+.navbar-connection-status.status-draw-50-move-rule,
+.navbar-connection-status.status-draw-agreed {
+  background-color: rgba(149, 165, 166, 0.2); /* Greyish for draw */
+  color: #95a5a6;
+}
 /* Main Content Area */
 .app-main-content {
   flex-grow: 1; /* Allows main content to fill available space */
