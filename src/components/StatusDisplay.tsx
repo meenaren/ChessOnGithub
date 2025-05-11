@@ -75,12 +75,34 @@ const StatusDisplay: React.FC<StatusDisplayProps> = ({
     case GameStatus.DISCONNECTED_OPPONENT_LEFT:
       statusText = `Opponent (${opponentPeerId || 'Player'}) disconnected.`;
       break;
+    case GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT:
+      statusText = 'Connection lost. Attempting to reconnect...';
+      break;
+    case GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC:
+      statusText = 'Opponent reconnected. Awaiting game state synchronization...';
+      break;
+    case GameStatus.RESYNCHRONIZING_GAME_STATE:
+      statusText = 'Resynchronizing game state...';
+      break;
+    case GameStatus.RESYNCHRONIZATION_SUCCESSFUL:
+      statusText = `Game resynchronized successfully! ${turnIndicator}`;
+      break;
+    case GameStatus.RESYNCHRONIZATION_FAILED:
+      statusText = 'Game resynchronization failed. The game state might be inconsistent.';
+      break;
     case GameStatus.GAME_ENDED_BY_ERROR:
       statusText = 'Game ended due to an error.';
       break;
     default:
-      // Handle cases where gameStatus might be a custom string
-      statusText = typeof gameStatus === 'string' ? gameStatus : 'Game status unknown.';
+      // Handle cases where gameStatus might be a custom string or an unhandled GameStatus enum
+      if (Object.values(GameStatus).includes(gameStatus as GameStatus)) {
+        // It's a valid GameStatus enum value that we haven't explicitly handled above
+        statusText = `Game status: ${gameStatus}. ${turnIndicator}`;
+      } else if (typeof gameStatus === 'string') {
+        statusText = gameStatus; // Custom string message
+      } else {
+        statusText = 'Game status unknown.';
+      }
   }
 
   const playerInfo = localPlayerColor ? `You are: ${localPlayerColor === 'w' ? 'White' : 'Black'}` : 'Color not assigned yet.';

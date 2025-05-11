@@ -1,7 +1,8 @@
 import { P2PMessageKeyEnum } from '../utils/types';
 import type {
-  Move, MovePayload, PlayerColor,
-  MoveMessage, GameStateUpdateMessage, ResignMessage, DrawOfferMessage, GameStateUpdatePayload
+  Move, MovePayload, PlayerColor, GameStatus, // Added GameStatus here as it's used in createGameStateMessage and createSyncGameStateMessage
+  MoveMessage, GameStateUpdateMessage, ResignMessage, DrawOfferMessage, GameStateUpdatePayload,
+  RequestGameStateMessage, SyncGameStateMessage, SyncGameStatePayload, RequestGameStatePayload // Added new types
 } from '../utils/types';
 
 /**
@@ -52,8 +53,56 @@ export const createGameStateMessage = (fen: string, turn: PlayerColor, gameStatu
     payload,
   };
 };
-// Make sure GameStatus is imported if not already
-import type { GameStatus } from '../utils/types';
+// GameStatus is now imported at the top
+
+/**
+ * Creates a P2P message to request the full game state from the opponent.
+ * @returns A RequestGameStateMessage object.
+ */
+export const createRequestGameStateMessage = (): RequestGameStateMessage => {
+  return {
+    type: P2PMessageKeyEnum.REQUEST_GAME_STATE,
+    payload: null, // Payload is null as per RequestGameStatePayload type
+  };
+};
+
+/**
+ * Creates a P2P message to send the full game state to the opponent.
+ * @param fen - The FEN string representing the board state.
+ * @param turn - The current player's turn.
+ * @param gameStatus - The current game status.
+ * @param lastMove - The last move made in the game.
+ * @param moveHistory - An array of moves made so far.
+ * @param playerWhiteId - Peer ID of the player who is White.
+ * @param playerBlackId - Peer ID of the player who is Black.
+ * @param isHostInitiated - Whether the host is sending this state.
+ * @returns A SyncGameStateMessage object.
+ */
+export const createSyncGameStateMessage = (
+  fen: string,
+  turn: PlayerColor,
+  gameStatus: GameStatus,
+  lastMove: Move | null,
+  moveHistory: Move[],
+  playerWhiteId: string,
+  playerBlackId: string,
+  isHostInitiated: boolean
+): SyncGameStateMessage => {
+  const payload: SyncGameStatePayload = {
+    fen,
+    turn,
+    gameStatus,
+    lastMove,
+    moveHistory,
+    playerWhiteId,
+    playerBlackId,
+    isHostInitiated,
+  };
+  return {
+    type: P2PMessageKeyEnum.SYNC_GAME_STATE,
+    payload,
+  };
+};
 
 /**
  * Placeholder for creating a resignation message.

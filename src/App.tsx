@@ -4,11 +4,19 @@ import useGameConnection from './hooks/useGameConnection';
 import ConnectionManager from './components/ConnectionManager';
 import Board from './components/Board';
 import StatusDisplay from './components/StatusDisplay';
-import PromotionChoice from './components/PromotionChoice'; // Added
+import PromotionChoice from './components/PromotionChoice';
 import * as gameLogic from './modules/gameLogic';
-import type { AppGameState, PlayerColor, Move as AppMove, AnyP2PMessage, GameStateUpdatePayload, MovePayload, InitialGameSetupPayload, InitialGameSetupMessage, PieceSymbol as AppPieceSymbol } from './utils/types'; // Added AppPieceSymbol
-import { P2PMessageKeyEnum, GameStatus, PieceSymbol } from './utils/types'; // Added PieceSymbol
-import { Chess, type Square } from 'chess.js'; // Imported Chess directly
+import * as p2pService from './modules/p2pService'; // Import all p2pService functions
+import type {
+  AppGameState, PlayerColor, Move as AppMove, AnyP2PMessage,
+  GameStateUpdatePayload, MovePayload, InitialGameSetupPayload, InitialGameSetupMessage,
+  PieceSymbol as AppPieceSymbol,
+  SyncGameStatePayload, // Added
+  RequestGameStateMessage as AppRequestGameStateMessage, // Added with alias
+  SyncGameStateMessage as AppSyncGameStateMessage // Added with alias
+} from './utils/types';
+import { P2PMessageKeyEnum, GameStatus, PieceSymbol } from './utils/types';
+import { Chess, type Square } from 'chess.js';
 
 interface PromotionPendingData {
   from: Square;
@@ -33,9 +41,10 @@ function App() {
       opponentPeerId: null,
       isHost: null,
       status: GameStatus.AWAITING_CONNECTION,
-      castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } }, // Simplified, chess.js handles internally
-      enPassantTarget: null, // Simplified
+      castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } },
+      enPassantTarget: null,
       winner: null,
+      moveHistory: [], // Added moveHistory
     };
   });
 
@@ -80,15 +89,21 @@ function App() {
                   currentTurn: newLogicState.turn,
                   status: newLogicState.appStatus,
                   winner: newLogicState.winner,
+                  moveHistory: [...prev.moveHistory, appMove], // Add to history
                 }));
               } else {
                 console.error("Received invalid move from opponent:", appMove);
-                // Potentially request resync or handle error
+                // Opponent sent an invalid move, request resync from host
+                if (!isHost && peerId && opponentPeerId) {
+                    console.log("Requesting game state from host due to invalid opponent move.");
+                    sendGameData(p2pService.createRequestGameStateMessage());
+                    setGameState(prev => ({ ...prev, status: GameStatus.RESYNCHRONIZING_GAME_STATE }));
+                }
               }
             }
           }
           break;
-        case P2PMessageKeyEnum.GAME_STATE_UPDATE: // For full state sync if needed
+        case P2PMessageKeyEnum.GAME_STATE_UPDATE: // For simple FEN/turn updates (less common now with SYNC_GAME_STATE)
           {
             const updatePayload = message.payload as GameStateUpdatePayload;
             const logicState = gameLogic.getGameStatus(updatePayload.fen);
@@ -96,9 +111,61 @@ function App() {
               ...prev,
               fen: updatePayload.fen,
               currentTurn: logicState.turn,
-              status: logicState.appStatus,
+              status: logicState.appStatus, // Use appStatus from logic
               winner: logicState.winner,
+              // moveHistory might be out of sync here, SYNC_GAME_STATE is better
             }));
+          }
+          break;
+        case P2PMessageKeyEnum.REQUEST_GAME_STATE:
+          if (isHost && opponentPeerId && peerId) { // Only host responds to this
+            console.log("Host received REQUEST_GAME_STATE from opponent. Sending current state.");
+            const syncMessage = p2pService.createSyncGameStateMessage(
+              gameState.fen,
+              gameState.currentTurn,
+              gameState.status,
+              gameState.moveHistory.length > 0 ? gameState.moveHistory[gameState.moveHistory.length - 1] : null,
+              gameState.moveHistory,
+              isHost ? peerId : opponentPeerId, // playerWhiteId
+              isHost ? opponentPeerId : peerId, // playerBlackId (assuming host is white for now)
+              true // isHostInitiated
+            );
+            sendGameData(syncMessage);
+            setGameState(prev => ({ ...prev, status: GameStatus.RESYNCHRONIZING_GAME_STATE }));
+          }
+          break;
+        case P2PMessageKeyEnum.SYNC_GAME_STATE:
+          {
+            const syncPayload = message.payload as SyncGameStatePayload;
+            console.log("Received SYNC_GAME_STATE:", syncPayload);
+            // Basic validation: if the message is not from the host and we are the host, ignore (or handle conflict)
+            if (isHost && !syncPayload.isHostInitiated) {
+                console.warn("Host received SYNC_GAME_STATE not initiated by host. Ignoring for now.");
+                break;
+            }
+
+            const logicState = gameLogic.getGameStatus(syncPayload.fen); // Get status from the synced FEN
+            setGameState(prev => ({
+              ...prev,
+              fen: syncPayload.fen,
+              currentTurn: syncPayload.turn, // Use turn from payload
+              status: logicState.appStatus, // Use appStatus from logic based on synced FEN
+              winner: logicState.winner,
+              moveHistory: syncPayload.moveHistory || [], // Ensure moveHistory is an array
+              // Potentially update localPlayerColor if IDs match, but this should be stable
+              localPlayerColor: prev.localPlayerColor || (peerId === syncPayload.playerWhiteId ? 'w' : (peerId === syncPayload.playerBlackId ? 'b' : null)),
+              opponentPeerId: prev.opponentPeerId || (peerId === syncPayload.playerWhiteId ? syncPayload.playerBlackId : syncPayload.playerWhiteId),
+            }));
+            // After applying, set status to successful. UI can then react.
+            // A brief timeout can make the "Resynchronizing..." message visible.
+            setTimeout(() => {
+                setGameState(prev => ({ ...prev, status: GameStatus.RESYNCHRONIZATION_SUCCESSFUL }));
+                // Transition back to IN_PROGRESS or the actual game status after a short delay
+                setTimeout(() => {
+                    const currentLogicState = gameLogic.getGameStatus(syncPayload.fen);
+                    setGameState(prev => ({ ...prev, status: currentLogicState.appStatus }));
+                }, 1500);
+            }, 500);
           }
           break;
         case P2PMessageKeyEnum.RESIGN:
@@ -111,21 +178,50 @@ function App() {
         // Add other cases like DRAW_OFFER, DRAW_ACCEPT if implemented
       }
     }
-  }, [receivedData, isHost, peerId, gameState.fen, gameState.currentTurn, gameState.localPlayerColor]);
+  }, [receivedData, isHost, peerId, opponentPeerId, sendGameData, gameState.fen, gameState.currentTurn, gameState.localPlayerColor, gameState.status, gameState.moveHistory]);
 
   // Effect to update local game state based on connection status changes from useGameConnection
   useEffect(() => {
     setGameState(prev => ({
       ...prev,
       gameId: gameId,
-      localPlayerColor: assignedColor, // This comes from useGameConnection after host/join logic
+      localPlayerColor: assignedColor,
       opponentPeerId: opponentPeerId,
       isHost: isHost,
-      status: isConnected ? (prev.status === GameStatus.AWAITING_CONNECTION || prev.status === GameStatus.SETTING_UP ? GameStatus.IN_PROGRESS : prev.status) : (opponentPeerId ? GameStatus.DISCONNECTED_OPPONENT_LEFT : GameStatus.AWAITING_CONNECTION),
+      // Update status based on connectionStatus from the hook
+      status: connectionStatus === GameStatus.IN_PROGRESS && isConnected ? GameStatus.IN_PROGRESS :
+              connectionStatus === GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT ? GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT :
+              connectionStatus === GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC ? GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC :
+              connectionStatus === GameStatus.DISCONNECTED_OPPONENT_LEFT ? GameStatus.DISCONNECTED_OPPONENT_LEFT :
+              isConnected ? (prev.status === GameStatus.AWAITING_CONNECTION || prev.status === GameStatus.SETTING_UP || prev.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL ? GameStatus.IN_PROGRESS : prev.status) :
+              GameStatus.AWAITING_CONNECTION,
     }));
 
-    if (isConnected && isHost && opponentPeerId && gameState.status !== GameStatus.IN_PROGRESS && gameState.status !== GameStatus.WHITE_IN_CHECK && gameState.status !== GameStatus.BLACK_IN_CHECK ) { // Host initiates game setup on connection
-        // This is the first time host knows opponent is connected and game can start
+    // Handle specific connection status changes
+    if (connectionStatus === GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC && isHost && peerId && opponentPeerId) {
+      console.log("Host detected opponent reconnected. Sending SYNC_GAME_STATE.");
+      const syncMessage = p2pService.createSyncGameStateMessage(
+        gameState.fen,
+        gameState.currentTurn,
+        gameState.status, // Send current game status
+        gameState.moveHistory.length > 0 ? gameState.moveHistory[gameState.moveHistory.length - 1] : null,
+        gameState.moveHistory,
+        isHost ? peerId : opponentPeerId, // playerWhiteId
+        isHost ? opponentPeerId : peerId, // playerBlackId
+        true // isHostInitiated
+      );
+      sendGameData(syncMessage);
+      setGameState(prev => ({ ...prev, status: GameStatus.RESYNCHRONIZING_GAME_STATE }));
+    } else if (connectionStatus === GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC && !isHost) {
+        // Client could optimistically request state if host doesn't send it quickly enough
+        // For now, client waits for host's SYNC_GAME_STATE triggered by host's own detection
+        console.log("Client detected opponent reconnected. Awaiting SYNC_GAME_STATE from host.");
+        setGameState(prev => ({ ...prev, status: GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC }));
+    }
+
+
+    // Initial game setup by host
+    if (isConnected && isHost && opponentPeerId && gameState.status !== GameStatus.IN_PROGRESS && !gameState.moveHistory.length && (connectionStatus === GameStatus.IN_PROGRESS || connectionStatus.includes("connected"))) {
         const initialFen = gameLogic.initializeNewGame();
         const initialLogicState = gameLogic.getGameStatus(initialFen);
         
@@ -149,9 +245,7 @@ function App() {
             payload: setupPayload,
         } as InitialGameSetupMessage); // Correct cast to specific message type
     }
-
-
-  }, [isConnected, isHost, gameId, assignedColor, opponentPeerId, peerId, sendGameData]);
+  }, [isConnected, isHost, gameId, assignedColor, opponentPeerId, peerId, sendGameData, connectionStatus, gameState.fen, gameState.currentTurn, gameState.status, gameState.moveHistory]);
 
 
   const handleHostGame = () => {
@@ -169,6 +263,7 @@ function App() {
       castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } },
       enPassantTarget: null,
       winner: null,
+      moveHistory: [],
     });
   };
 
@@ -238,6 +333,7 @@ function App() {
         currentTurn: newLogicState.turn,
         status: newLogicState.appStatus,
         winner: newLogicState.winner,
+        moveHistory: [...prev.moveHistory, moveAttempt], // Add to history
       }));
 
       const movePayload: MovePayload = {
@@ -269,6 +365,7 @@ function App() {
         currentTurn: newLogicState.turn,
         status: newLogicState.appStatus,
         winner: newLogicState.winner,
+        moveHistory: [...prev.moveHistory, moveWithPromotion], // Add to history
       }));
 
       const movePayload: MovePayload = {
@@ -313,14 +410,16 @@ function App() {
           onLeaveGame={leaveGame}
           error={error}
           opponentPeerId={gameState.opponentPeerId} // Pass down opponentPeerId
-          assignedColor={gameState.localPlayerColor} // Pass down assignedColor (localPlayerColor)
+          assignedColor={gameState.localPlayerColor}
         />
 
-        {isConnected && gameState.localPlayerColor && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK || gameState.status.startsWith("CHECKMATE") || gameState.status.startsWith("DRAW") || gameState.status.startsWith("RESIGNATION")) && (
+        {/* Show board and status if game is active, or if attempting/undergoing resync */}
+        {(isConnected || gameState.status === GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT || gameState.status === GameStatus.RESYNCHRONIZING_GAME_STATE) && gameState.localPlayerColor && (
           <>
             <StatusDisplay
               currentTurn={gameState.currentTurn}
-              gameStatus={gameState.status}
+              // Pass connectionStatus from hook for more detailed P2P status, and gameState.status for game logic status
+              gameStatus={connectionStatus === GameStatus.IN_PROGRESS && isConnected ? gameState.status : connectionStatus as GameStatus}
               localPlayerColor={gameState.localPlayerColor}
               opponentPeerId={gameState.opponentPeerId}
               isConnected={isConnected}
@@ -331,9 +430,9 @@ function App() {
               gameFen={gameState.fen}
               onPieceDrop={handlePieceDrop}
               boardOrientation={gameState.localPlayerColor}
-              arePiecesDraggable={isConnected && gameState.currentTurn === gameState.localPlayerColor && !promotionPendingData && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK)}
+              arePiecesDraggable={isConnected && gameState.currentTurn === gameState.localPlayerColor && !promotionPendingData && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK || gameState.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL)}
             />
-            {(gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK) && !promotionPendingData && (
+            {(isConnected && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK)) && !promotionPendingData && (
                  <button onClick={handleResign} style={{marginTop: '10px'}}>Resign</button>
             )}
             {promotionPendingData && gameState.localPlayerColor && (
@@ -344,7 +443,7 @@ function App() {
             )}
           </>
         )}
-        { !isConnected && gameState.status !== GameStatus.AWAITING_CONNECTION && <p>Disconnected or game ended.</p>}
+        { !isConnected && gameState.status !== GameStatus.AWAITING_CONNECTION && gameState.status !== GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT && <p>Disconnected. Please host or join a game.</p>}
 
       </main>
     </div>

@@ -1,94 +1,86 @@
-# Active Context: ChessOnGithub (2025-05-11 Update)
+# Active Context: ChessOnGithub (2025-05-11 Task Update: P2P Resilience)
 
 ## 1. Current Work Focus
 
-The previous primary focus on implementing core chess gameplay functionality is now **complete**.
-Current focus shifts to:
-- Thorough testing of the implemented gameplay.
-- Bug fixing and refinement based on testing.
-- Potentially addressing minor UI/UX improvements related to gameplay feedback.
+The current task focused on enhancing P2P communication resilience by implementing error handling for disconnections and a game state resynchronization mechanism. This task is now considered complete at a foundational level.
 
-## 2. Recent Changes & Completed Features (Core Gameplay Task)
+## 2. Recent Changes & Completed Features (P2P Resilience Task)
 
-- **Memory Bank Established:** Initial versions of all core memory bank files created (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `activeContext.md`, `progress.md`).
 - **Type Definitions (`src/utils/types.ts`):**
-    - Defined comprehensive types for P2P messages (`P2PMessage`, `P2PMessageKeyEnum`, specific payload types like `ConnectionConfirmedPayload`, `MovePayload`, `InitialGameSetupPayload`, `GameStateUpdatePayload`, `ErrorPayload`, and `AnyP2PMessage` union).
-    - Defined types for game entities (`PlayerColor`, `PieceSymbol`, `GameStatus` enum, `Square`, `Move`, `CastlingRights`).
-    - Defined `AppGameState` for the main application state.
-    - Resolved numerous TypeScript errors to ensure type safety and compatibility with Trystero.
-- **Game Logic Module (`src/modules/gameLogic.ts`):**
-    - Implemented `initializeNewGame()` to get starting FEN.
-    - Implemented `makeMove()` using `chess.js` to validate and apply moves, returning new FEN.
-    - Implemented `getGameStatus()` to determine check, checkmate, stalemate, draw conditions, and current turn, returning a `GameLogicState` object including an `AppGameStatus`.
-- **Chessboard Component (`src/components/Board.tsx`):**
-    - Integrated `react-chessboard`.
-    - Handles `onPieceDrop` callback to attempt local moves.
-    - Configured `boardOrientation` based on player color.
-    - Manages `arePiecesDraggable` based on current turn and connection status.
-- **Status Display Component (`src/components/StatusDisplay.tsx`):**
-    - Displays current player's turn.
-    - Shows various game status messages based on `GameStatus` enum (check, checkmate, draw types, connection states).
-    - Displays player color and connection information.
+    - Added `REQUEST_GAME_STATE`, `SYNC_GAME_STATE` to `P2PMessageKeyEnum`.
+    - Defined `RequestGameStatePayload` (as `null`), `SyncGameStatePayload` (fen, turn, gameStatus, lastMove, moveHistory, player IDs, hostInitiated flag).
+    - Defined `RequestGameStateMessage`, `SyncGameStateMessage` types.
+    - Updated `AnyP2PMessage` union to include new message types.
+    - Added new `GameStatus` enum values: `CONNECTION_LOST_ATTEMPTING_RECONNECT`, `OPPONENT_RECONNECTED_AWAITING_SYNC`, `RESYNCHRONIZING_GAME_STATE`, `RESYNCHRONIZATION_SUCCESSFUL`, `RESYNCHRONIZATION_FAILED`.
+    - Added `moveHistory: Move[]` to `AppGameState` interface.
+
 - **P2P Service Utilities (`src/modules/p2pService.ts`):**
-    - Updated message creation functions (`createMoveMessage`, `createGameStateMessage`, `createResignMessage`, etc.) to use new types and `P2PMessageKeyEnum`.
-    - Ensured correct payload structure (e.g., `payload: null` for simple messages).
+    - Added `createRequestGameStateMessage()` function.
+    - Added `createSyncGameStateMessage()` function.
+
 - **Game Connection Hook (`src/hooks/useGameConnection.ts`):**
-    - Updated to use `AnyP2PMessage` for generic message handling.
-    - Corrected payload creation for `CONNECTION_CONFIRMED` message to include all required (nullable) fields.
-    - Ensured correct import and usage of `P2PMessageKeyEnum` and specific message types.
-- **Connection Manager Component (`src/components/ConnectionManager.tsx`):**
-    - Refactored to be a presentational component, receiving P2P state and control functions as props from `App.tsx`.
-    - Defined `ConnectionManagerProps` to accept necessary data and callbacks.
+    - Improved `onPeerLeave` handler to set `connectionStatus` to `GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT` and `GameStatus.DISCONNECTED_OPPONENT_LEFT`.
+    - Updated `onPeerJoin` handler to set `connectionStatus` to `GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC` if a known opponent rejoins, signaling `App.tsx` to manage sync.
+    - Ensured `connectionStatus` state uses new `GameStatus` enum values.
+    - Corrected a scope issue with `playerColorForOpponent` variable.
+
 - **Main Application (`src/App.tsx`):**
-    - Integrated `ConnectionManager`, `Board`, and `StatusDisplay`.
-    - Manages overall `AppGameState`.
-    - Uses `useGameConnection` hook to handle P2P interactions.
-    - Implements `handleHostGame` and `handleJoinGame` logic.
-    - Host assigns 'w' (White) to self and 'b' (Black) to joiner.
-    - Host sends `INITIAL_GAME_SETUP` message with starting FEN to joiner.
-    - Handles `MOVE` messages from opponent, validates with `gameLogic.ts`, and updates state.
-    - Local moves are validated, applied, and sent to opponent.
-    - Enforces turn-based play.
-    - Handles `RESIGN` messages.
-    - Basic game synchronization logic implemented.
+    - Added `moveHistory: AppMove[]` to `AppGameState` state, initialized as empty and updated on each successful local or opponent move.
+    - Extended `useEffect` for `receivedData` to handle:
+        - `REQUEST_GAME_STATE`: Host sends `SYNC_GAME_STATE` message with current FEN, turn, status, move history, and player IDs.
+        - `SYNC_GAME_STATE`: Client updates its local game state (FEN, turn, status, move history) from the payload. Sets `gameState.status` to reflect resynchronization progress.
+    - Updated `useEffect` for `connectionStatus` (from `useGameConnection`) to:
+        - Trigger host to send `SYNC_GAME_STATE` if `connectionStatus` is `GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC`.
+        - Update `gameState.status` based on `GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT` and `GameStatus.DISCONNECTED_OPPONENT_LEFT`.
+    - Ensured `moveHistory` is correctly added to `AppGameState` and updated.
+
+- **Status Display Component (`src/components/StatusDisplay.tsx`):**
+    - Updated to display user-friendly messages for new `GameStatus` enum values related to disconnection and resynchronization (`CONNECTION_LOST_ATTEMPTING_RECONNECT`, `OPPONENT_RECONNECTED_AWAITING_SYNC`, `RESYNCHRONIZING_GAME_STATE`, `RESYNCHRONIZATION_SUCCESSFUL`, `RESYNCHRONIZATION_FAILED`).
 
 ## 3. Next Steps
 
-1.  **Testing - P2P Gameplay:**
+1.  **Thorough Testing - P2P Resilience:**
+    *   Test disconnection scenarios (host leaves, client leaves).
+    *   Test reconnection scenarios and verify game state resynchronization.
+    *   Verify UI updates correctly reflect connection and resync statuses.
+    *   Test what happens if resynchronization fails or if states conflict (currently, host is source of truth).
+2.  **Testing - Core P2P Gameplay (as previously planned):**
     *   Test hosting a game and having another player join.
     *   Verify correct color assignment and board orientation.
-    *   Play through several games, testing all move types (castling, en passant - if fully supported by `chess.js` move object, promotion - basic for now).
+    *   Play through several games, testing all move types (castling, en passant, promotion).
     *   Verify check, checkmate, stalemate, and draw conditions are correctly detected and displayed.
     *   Test resignation.
-    *   Test disconnections and reconnections (if supported by Trystero/hook).
-2.  **Bug Fixing:** Address any issues found during testing.
-3.  **Refinement - UI/UX:**
+3.  **Bug Fixing:** Address any issues found during testing.
+4.  **Refinement - UI/UX:**
     *   Improve visual feedback for invalid moves.
-    *   Consider UI for pawn promotion selection.
+    *   Implement UI for pawn promotion selection (currently defaults to Queen or relies on `chess.js` default).
     *   Enhance display of game end states.
-4.  **Advanced P2P Features (Future Scope):**
+5.  **Advanced P2P Features (Future Scope):**
     *   Implement draw offers/acceptance.
     *   Chat functionality.
-    *   More robust error handling and resynchronization logic.
-5.  **Code Cleanup & Documentation:**
+    *   More robust automatic reconnection attempts (client-side).
+    *   Handling resynchronization conflicts more gracefully if non-host state is more recent.
+6.  **Code Cleanup & Documentation:**
     *   Review code for clarity and add comments where necessary.
     *   Ensure all Memory Bank files are up-to-date with final decisions.
 
 ## 4. Active Decisions and Considerations
 
-- **Pawn Promotion UI:** Currently, `gameLogic.makeMove` and `App.handlePieceDrop` assume basic promotion or that `chess.js` handles it by default (e.g., to Queen). A UI for selecting promotion piece is needed for full functionality.
-- **Error Handling for P2P:** While basic connection status is shown, more robust error handling for message failures or desyncs might be needed.
-- **State Management for Complex Features:** If features like game history, spectating, or more complex UI interactions are added, a more advanced state management solution (Context API with reducers, Zustand, etc.) might be beneficial over prop drilling.
+- **Source of Truth for Resync:** Currently, the host is the primary source of truth for game state resynchronization. If the connection drops mid-game, the player whose turn it *was* could also be a candidate, but host-priority was simpler for this initial implementation. This might need refinement if conflicts arise where the client had a more up-to-date state before disconnection.
+- **Automatic Reconnection:** The client-side automatic reconnection in `useGameConnection.ts` is currently very basic (sets status, doesn't aggressively retry joining). More robust retry logic with backoff could be added.
+- **Move History for Full Resync:** The `moveHistory` is now part of `SYNC_GAME_STATE`. This allows for more robust validation on the receiving end if needed in the future (e.g., replaying moves to verify FEN).
+- **Error Handling for Resync Failure:** If `SYNC_GAME_STATE` fails or data is corrupt, the current implementation sets a "failed" status. More user-friendly recovery options (e.g., offer new game) could be added.
 
 ## 5. Important Patterns and Preferences
 
 - Continue using `react-chessboard` and `chess.js`.
 - Maintain separation of concerns: UI, game logic, P2P communication.
 - TypeScript for type safety.
+- Host-centric model for initial game setup and resynchronization simplifies initial logic.
 
 ## 6. Learnings and Project Insights
 
-- Core gameplay loop is functional.
-- P2P message passing for moves and game setup is working.
-- Type safety significantly helped in integrating different modules, though it required many iterations to get right with the P2P library's expectations.
-- The current state management in `App.tsx` is manageable but could become complex with more features.
+- Implementing resynchronization adds significant complexity to state management in `App.tsx` and interaction with `useGameConnection.ts`.
+- Clear P2P message types and defined `GameStatus` states are crucial for managing these complex interactions.
+- Testing various disconnection and reconnection scenarios will be critical to ensure robustness.
+- The `moveHistory` array, while simple, provides a good foundation for more advanced state validation if needed.

@@ -17,6 +17,8 @@ export const P2PMessageKeyEnum = {
   DRAW_OFFER: 'DRAW_OFFER',
   DRAW_ACCEPT: 'DRAW_ACCEPT',
   ERROR: 'ERROR',
+  REQUEST_GAME_STATE: 'REQUEST_GAME_STATE',
+  SYNC_GAME_STATE: 'SYNC_GAME_STATE',
 } as const;
 export type P2PMessageKey = typeof P2PMessageKeyEnum[keyof typeof P2PMessageKeyEnum];
 
@@ -41,7 +43,13 @@ export const GameStatus = {
   STALEMATE_DRAW: 'STALEMATE_DRAW', DRAW_BY_THREEFOLD_REPETITION: 'DRAW_BY_THREEFOLD_REPETITION',
   DRAW_BY_FIFTY_MOVE_RULE: 'DRAW_BY_FIFTY_MOVE_RULE', DRAW_BY_INSUFFICIENT_MATERIAL: 'DRAW_BY_INSUFFICIENT_MATERIAL',
   RESIGNATION_WHITE_WINS: 'RESIGNATION_WHITE_WINS', RESIGNATION_BLACK_WINS: 'RESIGNATION_BLACK_WINS',
-  DRAW_AGREED: 'DRAW_AGREED', DISCONNECTED_OPPONENT_LEFT: 'DISCONNECTED_OPPONENT_LEFT',
+  DRAW_AGREED: 'DRAW_AGREED',
+  DISCONNECTED_OPPONENT_LEFT: 'DISCONNECTED_OPPONENT_LEFT', // General disconnection
+  CONNECTION_LOST_ATTEMPTING_RECONNECT: 'CONNECTION_LOST_ATTEMPTING_RECONNECT',
+  OPPONENT_RECONNECTED_AWAITING_SYNC: 'OPPONENT_RECONNECTED_AWAITING_SYNC',
+  RESYNCHRONIZING_GAME_STATE: 'RESYNCHRONIZING_GAME_STATE',
+  RESYNCHRONIZATION_SUCCESSFUL: 'RESYNCHRONIZATION_SUCCESSFUL',
+  RESYNCHRONIZATION_FAILED: 'RESYNCHRONIZATION_FAILED',
   GAME_ENDED_BY_ERROR: 'GAME_ENDED_BY_ERROR',
 } as const;
 export type GameStatus = typeof GameStatus[keyof typeof GameStatus];
@@ -70,6 +78,7 @@ export interface AppGameState {
   gameId: string | null; fen: string; currentTurn: PlayerColor; localPlayerColor: PlayerColor | null;
   opponentPeerId: string | null; isHost: boolean | null; status: GameStatus;
   castlingRights: CastlingRights; enPassantTarget: Square | null; winner: PlayerColor | 'draw' | null;
+  moveHistory: Move[]; // Added for game state synchronization
 }
 
 // --- P2P Message Payloads ---
@@ -97,6 +106,20 @@ export interface MovePayload extends JsonObject {
   [key: string]: JsonValue; // Index signature
 }
 
+export type RequestGameStatePayload = null;
+
+export interface SyncGameStatePayload extends JsonObject {
+  fen: string;
+  turn: PlayerColor;
+  gameStatus: GameStatus; // The game status from the source of truth
+  lastMove: Move | null;
+  moveHistory: Move[]; // For more robust sync, can be empty if not fully implemented yet
+  playerWhiteId: string; // Peer ID of the player who is White
+  playerBlackId: string; // Peer ID of the player who is Black
+  isHostInitiated: boolean; // True if the host is sending this state
+  [key: string]: JsonValue;
+}
+
 export interface GameStateUpdatePayload extends JsonObject {
   fen: string;
   turn: PlayerColor;
@@ -120,8 +143,10 @@ export type ErrorMessage = P2PMessage<ErrorPayload>;
 export type ResignMessage = P2PMessage<null>;
 export type DrawOfferMessage = P2PMessage<null>;
 export type DrawAcceptMessage = P2PMessage<null>;
+export type RequestGameStateMessage = P2PMessage<RequestGameStatePayload>;
+export type SyncGameStateMessage = P2PMessage<SyncGameStatePayload>;
 
 export type AnyP2PMessage =
   | ConnectionConfirmedMessage | InitialGameSetupMessage | MoveMessage
   | GameStateUpdateMessage | ErrorMessage | ResignMessage
-  | DrawOfferMessage | DrawAcceptMessage;
+  | DrawOfferMessage | DrawAcceptMessage | RequestGameStateMessage | SyncGameStateMessage;
