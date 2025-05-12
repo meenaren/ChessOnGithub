@@ -38,7 +38,7 @@ const Board: React.FC<BoardProps> = ({
   };
 
   return (
-    <div style={{ width: '400px', maxWidth: '100vw' }}> {/* Basic responsive wrapper */}
+    <div style={{ width: '100%' }}> {/* Let parent containers control max-width and responsiveness */}
       <Chessboard
         position={gameFen}
         onPieceDrop={handlePieceDrop}

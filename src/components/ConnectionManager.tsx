@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-// Removed useGameConnection import as props will be passed down
+import { Paper, Typography, TextField, Button, Box, Stack, Chip } from '@mui/material';
 
 interface ConnectionManagerProps {
   peerId: string | null;
@@ -11,9 +11,6 @@ interface ConnectionManagerProps {
   onJoinGame: (idToJoin: string) => void;
   onLeaveGame: () => void;
   error: string | null;
-  // Props that might be displayed here or in StatusDisplay, passed from App.tsx
-  // For simplicity, if App.tsx's StatusDisplay shows these, they might not be needed here.
-  // However, the original component used them, so let's keep them for now.
   opponentPeerId: string | null;
   assignedColor: 'w' | 'b' | null;
 }
@@ -28,70 +25,138 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   onJoinGame,
   onLeaveGame,
   error,
-  opponentPeerId, // Added from props
-  assignedColor,  // Added from props
+  opponentPeerId,
+  assignedColor,
 }) => {
   const [roomIdToJoin, setRoomIdToJoin] = useState('');
 
   const handleHostGameClick = () => {
-    onHostGame(); // Call the prop function
+    onHostGame();
   };
 
   const handleJoinGameClick = () => {
     if (roomIdToJoin.trim()) {
-      onJoinGame(roomIdToJoin.trim()); // Call the prop function
+      onJoinGame(roomIdToJoin.trim());
     } else {
+      // Consider using an MUI Snackbar for alerts in a real app
       alert('Please enter a Game ID to join.');
     }
   };
 
   const handleLeaveGameClick = () => {
-    onLeaveGame(); // Call the prop function
+    onLeaveGame();
+  };
+
+  const getStatusChipColor = (status: string): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" => {
+    const lowerStatus = status.toLowerCase();
+    if (lowerStatus.includes('connected') && !lowerStatus.includes('not')) return "success";
+    if (lowerStatus.includes('connecting') || lowerStatus.includes('pending')) return "info";
+    if (lowerStatus.includes('error') || lowerStatus.includes('failed')) return "error";
+    if (lowerStatus.includes('disconnected') || lowerStatus.includes('closed')) return "warning";
+    return "default";
   };
 
   return (
-    <div className="connection-manager">
-      <h3 className="cm-title">Connection Manager</h3>
-      <div className="cm-status-section">
-        <p className="cm-status"><strong>Status:</strong> <span className={`status-${connectionStatus?.toLowerCase().replace(/_/g, '-')}`}>{connectionStatus}</span></p>
-        {error && <p className="cm-error"><strong>Error:</strong> {error}</p>}
-      </div>
-      
-      <div className="cm-info-section">
-        {peerId && <p>My Peer ID: <span className="cm-peer-id">{peerId}</span></p>}
-        {gameId && <p>Current Game ID: <span className="cm-game-id">{gameId}</span></p>}
-      </div>
-      
+    <Paper elevation={3} sx={{ padding: 3, margin: 2, backgroundColor: 'background.paper' }}>
+      <Typography variant="h5" component="h3" gutterBottom sx={{ color: 'text.primary' }}>
+        Connection Manager
+      </Typography>
+
+      <Box sx={{ marginBottom: 2 }}>
+        <Typography component="div" sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <strong>Status:</strong>
+          <Chip label={connectionStatus} color={getStatusChipColor(connectionStatus)} size="small" />
+        </Typography>
+        {error && (
+          <Typography color="error" sx={{ marginTop: 1 }}>
+            <strong>Error:</strong> {error}
+          </Typography>
+        )}
+      </Box>
+
+      <Box sx={{ marginBottom: 2 }}>
+        {peerId && (
+          <Typography sx={{ color: 'text.secondary' }}>
+            My Peer ID: <Typography component="span" sx={{ color: 'text.primary', fontWeight: 'medium' }}>{peerId}</Typography>
+          </Typography>
+        )}
+        {gameId && (
+          <Typography sx={{ color: 'text.secondary' }}>
+            Current Game ID: <Typography component="span" sx={{ color: 'text.primary', fontWeight: 'medium' }}>{gameId}</Typography>
+          </Typography>
+        )}
+      </Box>
+
       {!isConnected && !gameId && (
-        <div className="cm-actions-section">
-          <button onClick={handleHostGameClick} className="cm-button cm-button-host mb-1">
+        <Stack spacing={2} sx={{ marginTop: 2 }}>
+          <Button variant="contained" color="primary" onClick={handleHostGameClick}>
             Host New Game
-          </button>
-          <div className="cm-join-group">
-            <input
-              type="text"
-              placeholder="Enter Game ID to Join"
+          </Button>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <TextField
+              label="Game ID to Join"
+              variant="outlined"
+              size="small"
               value={roomIdToJoin}
               onChange={(e) => setRoomIdToJoin(e.target.value)}
-              className="cm-input cm-input-join-id"
+              fullWidth
+              InputLabelProps={{
+                style: { color: 'text.secondary' },
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'grey.700', // Default border color
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'grey.500', // Border color on hover
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'primary.main', // Border color when focused
+                  },
+                  // The 'color: text.primary' previously here was likely redundant or conflicting,
+                  // as input text color is specifically handled by '.MuiInputBase-input'.
+                },
+                '& .MuiInputBase-input': {
+                  color: 'text.primary', // Ensures the input text itself is the correct color
+                },
+              }}
             />
-            <button onClick={handleJoinGameClick} className="cm-button cm-button-join">Join Game</button>
-          </div>
-        </div>
+            <Button variant="contained" color="secondary" onClick={handleJoinGameClick}>
+              Join Game
+            </Button>
+          </Stack>
+        </Stack>
       )}
 
       {gameId && (
-        <div className="cm-game-active-info">
-          {isHost !== null && <p>Role: {isHost ? 'Host' : 'Joiner'}</p>}
-          {assignedColor && <p>Your Color: {assignedColor === 'w' ? 'White' : 'Black'}</p>}
-          {opponentPeerId && <p>Opponent ID: <span className="cm-peer-id">{opponentPeerId}</span></p>}
-          {isConnected && <p className="cm-connected-success"><strong>Successfully connected to opponent!</strong></p>}
-          <button onClick={handleLeaveGameClick} className="cm-button cm-button-leave mt-1">
+        <Box sx={{ marginTop: 2 }}>
+          {isHost !== null && (
+            <Typography sx={{ color: 'text.secondary' }}>
+              Role: <Typography component="span" sx={{ color: 'text.primary', fontWeight: 'medium' }}>{isHost ? 'Host' : 'Joiner'}</Typography>
+            </Typography>
+          )}
+          {assignedColor && (
+            <Typography sx={{ color: 'text.secondary' }}>
+              Your Color: <Typography component="span" sx={{ color: 'text.primary', fontWeight: 'medium' }}>{assignedColor === 'w' ? 'White' : 'Black'}</Typography>
+            </Typography>
+          )}
+          {opponentPeerId && (
+            <Typography sx={{ color: 'text.secondary' }}>
+              Opponent ID: <Typography component="span" sx={{ color: 'text.primary', fontWeight: 'medium' }}>{opponentPeerId}</Typography>
+            </Typography>
+          )}
+          {isConnected && (
+            <Typography color="success.main" sx={{ marginTop: 1, fontWeight: 'bold' }}>
+              Successfully connected to opponent!
+            </Typography>
+          )}
+          <Button variant="outlined" color="warning" onClick={handleLeaveGameClick} sx={{ marginTop: 2 }}>
             Leave Game
-          </button>
-        </div>
+          </Button>
+        </Box>
       )}
-    </div>
+    </Paper>
   );
 };
 

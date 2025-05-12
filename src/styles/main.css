@@ -255,6 +255,7 @@ button:disabled {
 }
 
 /* Basic input styling */
+/*
 input[type="text"],
 input[type="password"],
 input[type="email"],
@@ -267,6 +268,7 @@ select {
   width: calc(100% - 1.2rem); /* Full width minus padding */
   box-sizing: border-box;
 }
+*/
 
 /* Styles for game components to ensure visibility */
 .game-area {
