@@ -56,7 +56,7 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
     const shareData = {
       title: 'Join my Chess Game!',
       text: `Join my chess game. Game ID: ${gameId}`,
-      url: window.location.origin, // Or window.location.href for the full URL
+      url: new URL(import.meta.env.BASE_URL, window.location.origin).href,
     };
 
     if (navigator.share) {
