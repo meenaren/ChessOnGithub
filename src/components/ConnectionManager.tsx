@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Paper, Typography, TextField, Button, Box, Stack, Chip } from '@mui/material';
+import { Paper, Typography, TextField, Button, Box, Stack, Chip, IconButton } from '@mui/material';
+import ShareIcon from '@mui/icons-material/Share'; // Or any other share icon
 
 interface ConnectionManagerProps {
   peerId: string | null;
@@ -45,6 +46,39 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
 
   const handleLeaveGameClick = () => {
     onLeaveGame();
+  };
+
+  const handleShareInvite = async () => {
+    if (!gameId) {
+      console.error('No game ID available to share.');
+      return;
+    }
+    const shareData = {
+      title: 'Join my Chess Game!',
+      text: `Join my chess game. Game ID: ${gameId}`,
+      url: window.location.origin, // Or window.location.href for the full URL
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        console.log('Game invite shared successfully');
+      } catch (error) {
+        console.error('Error sharing game invite:', error);
+        // Fallback for when sharing fails or is cancelled by user
+        alert(`Could not share. Game ID: ${gameId}\nURL: ${shareData.url}`);
+      }
+    } else {
+      console.warn('Web Share API not supported. Fallback: copying to clipboard or manual share.');
+      // Fallback: Attempt to copy to clipboard
+      try {
+        await navigator.clipboard.writeText(`Join my chess game on ${shareData.url}. Game ID: ${gameId}`);
+        alert(`Invite link copied to clipboard!\nGame ID: ${gameId}\nURL: ${shareData.url}`);
+      } catch (err) {
+        console.error('Failed to copy to clipboard:', err);
+        alert(`Web Share not supported. Please manually share the Game ID: ${gameId} and URL: ${shareData.url}`);
+      }
+    }
   };
 
   const getStatusChipColor = (status: string): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" => {
@@ -151,9 +185,21 @@ const ConnectionManager: React.FC<ConnectionManagerProps> = ({
               Successfully connected to opponent!
             </Typography>
           )}
-          <Button variant="outlined" color="warning" onClick={handleLeaveGameClick} sx={{ marginTop: 2 }}>
-            Leave Game
-          </Button>
+          <Stack direction="row" spacing={1} sx={{ marginTop: 2 }}>
+            <Button variant="outlined" color="warning" onClick={handleLeaveGameClick}>
+              Leave Game
+            </Button>
+            {isHost && gameId && (
+              <Button
+                variant="contained"
+                color="info"
+                onClick={handleShareInvite}
+                startIcon={<ShareIcon />}
+              >
+                Invite
+              </Button>
+            )}
+          </Stack>
         </Box>
       )}
     </Paper>
