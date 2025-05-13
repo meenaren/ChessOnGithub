@@ -14,7 +14,8 @@ import type {
   SyncGameStatePayload,
   RequestGameStateMessage as AppRequestGameStateMessage,
   SyncGameStateMessage as AppSyncGameStateMessage,
-  DrawType as AppDrawType
+  DrawType as AppDrawType,
+  ResignPayload
 } from './utils/types';
 import { P2PMessageKeyEnum, GameStatus, PieceSymbol, DrawType } from './utils/types';
 import { Chess, type Square } from 'chess.js';
@@ -25,6 +26,7 @@ function App() {
     connectionStatus, hostGame, joinGame, sendGameData, receivedData, leaveGame, error
   } = useGameConnection();
 
+  const [showResignConfirmDialog, setShowResignConfirmDialog] = useState(false);
   const [gameState, setGameState] = useState<AppGameState>(() => {
     const initialFen = gameLogic.initializeNewGame();
     const initialLogicState = gameLogic.getGameStatus(initialFen);
@@ -124,9 +126,9 @@ function App() {
               gameState.status,
               gameState.moveHistory.length > 0 ? gameState.moveHistory[gameState.moveHistory.length - 1] : null,
               gameState.moveHistory,
-              isHost ? peerId : opponentPeerId,
-              isHost ? opponentPeerId : peerId,
-              true
+              isHost ? peerId : opponentPeerId, // playerWhiteId
+              isHost ? opponentPeerId : peerId, // playerBlackId
+              true // isHostInitiated
             );
             sendGameData(syncMessage);
             setGameState(prev => ({ ...prev, status: GameStatus.RESYNCHRONIZING_GAME_STATE }));
@@ -144,8 +146,8 @@ function App() {
             setGameState(prev => ({
               ...prev,
               fen: syncPayload.fen,
-              currentTurn: syncPayload.turn,
-              status: logicState.appStatus,
+              currentTurn: syncPayload.turn, 
+              status: logicState.appStatus, 
               isCheck: logicState.isCheck,
               isCheckmate: logicState.isCheckmate,
               winner: logicState.winner,
@@ -157,21 +159,26 @@ function App() {
             setTimeout(() => {
                 setGameState(prev => ({ ...prev, status: GameStatus.RESYNCHRONIZATION_SUCCESSFUL }));
                 setTimeout(() => {
-                    const currentLogicState = gameLogic.getGameStatus(syncPayload.fen);
+                    const currentLogicState = gameLogic.getGameStatus(syncPayload.fen); 
                     setGameState(prev => ({ ...prev, status: currentLogicState.appStatus, isCheck: currentLogicState.isCheck, isCheckmate: currentLogicState.isCheckmate, drawType: currentLogicState.drawType }));
-                }, 1500);
-            }, 500);
+                }, 1500); 
+            }, 500); 
           }
           break;
         case P2PMessageKeyEnum.RESIGN:
-          setGameState(prev => ({
-            ...prev,
-            status: prev.localPlayerColor === 'w' ? GameStatus.RESIGNATION_BLACK_WINS : GameStatus.RESIGNATION_WHITE_WINS,
-            winner: prev.localPlayerColor === 'w' ? 'b' : 'w',
-            isCheck: false,
-            isCheckmate: false,
-            drawType: null,
-          }));
+          {
+            const resignPayload = message.payload as ResignPayload;
+            console.log("Received RESIGN message from opponent:", resignPayload);
+            if (resignPayload && resignPayload.resigningPlayerColor) {
+              const newLogicState = gameLogic.handleResignation(gameState.fen, resignPayload.resigningPlayerColor);
+              setGameState(prev => ({
+                ...prev,
+                ...newLogicState, // Apply the full state from handleResignation
+              }));
+            } else {
+              console.warn("Received invalid RESIGN message payload:", resignPayload);
+            }
+          }
           break;
       }
     }
@@ -181,15 +188,18 @@ function App() {
     setGameState(prev => ({
       ...prev,
       gameId: gameId,
-      localPlayerColor: assignedColor,
+      localPlayerColor: assignedColor, 
       opponentPeerId: opponentPeerId,
       isHost: isHost,
-      status: connectionStatus === GameStatus.IN_PROGRESS && isConnected ? GameStatus.IN_PROGRESS :
+      status: prev.isCheckmate || prev.winner || prev.drawType || 
+              prev.status === GameStatus.RESIGNATION_BLACK_WINS || 
+              prev.status === GameStatus.RESIGNATION_WHITE_WINS ? prev.status :
+              (connectionStatus === GameStatus.IN_PROGRESS && isConnected ? GameStatus.IN_PROGRESS :
               connectionStatus === GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT ? GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT :
               connectionStatus === GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC ? GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC :
               connectionStatus === GameStatus.DISCONNECTED_OPPONENT_LEFT ? GameStatus.DISCONNECTED_OPPONENT_LEFT :
               isConnected ? (prev.status === GameStatus.AWAITING_CONNECTION || prev.status === GameStatus.SETTING_UP || prev.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL ? GameStatus.IN_PROGRESS : prev.status) :
-              GameStatus.AWAITING_CONNECTION,
+              GameStatus.AWAITING_CONNECTION),
     }));
 
     if (connectionStatus === GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC && isHost && peerId && opponentPeerId) {
@@ -197,109 +207,124 @@ function App() {
       const syncMessage = p2pService.createSyncGameStateMessage(
         gameState.fen,
         gameState.currentTurn,
-        gameState.status,
+        gameState.status, 
         gameState.moveHistory.length > 0 ? gameState.moveHistory[gameState.moveHistory.length - 1] : null,
         gameState.moveHistory,
-        isHost ? peerId : opponentPeerId,
-        isHost ? opponentPeerId : peerId,
-        true
+        isHost ? peerId : opponentPeerId, 
+        isHost ? opponentPeerId : peerId, 
+        true 
       );
       sendGameData(syncMessage);
       setGameState(prev => ({ ...prev, status: GameStatus.RESYNCHRONIZING_GAME_STATE }));
     } else if (connectionStatus === GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC && !isHost) {
         console.log("Client detected opponent reconnected. Awaiting SYNC_GAME_STATE from host.");
-        setGameState(prev => ({ ...prev, status: GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC }));
+        setGameState(prev => ({ ...prev, status: GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC })); 
     }
 
     if (isConnected && isHost && opponentPeerId && gameState.status !== GameStatus.IN_PROGRESS && !gameState.moveHistory.length && (connectionStatus === GameStatus.IN_PROGRESS || (typeof connectionStatus === 'string' && connectionStatus.includes("connected")))) {
-        const initialFen = gameLogic.initializeNewGame();
-        const initialLogicState = gameLogic.getGameStatus(initialFen);
-        setGameState(prev => ({
-            ...prev,
-            fen: initialFen,
-            currentTurn: 'w',
-            localPlayerColor: 'w',
-            status: initialLogicState.appStatus,
-            isCheck: initialLogicState.isCheck,
-            isCheckmate: initialLogicState.isCheckmate,
-            drawType: initialLogicState.drawType,
-            opponentPeerId: opponentPeerId,
-            isHost: true,
-        }));
-        const setupPayload: InitialGameSetupPayload = {
-            startingFen: initialFen,
-            playerWhite: peerId!,
-            playerBlack: opponentPeerId!,
-        };
-        sendGameData({
-            type: P2PMessageKeyEnum.INITIAL_GAME_SETUP,
-            payload: setupPayload,
-        } as InitialGameSetupMessage);
+        if (gameState.fen === gameLogic.initializeNewGame() && gameState.localPlayerColor !== 'w') { 
+            const initialFen = gameLogic.initializeNewGame(); 
+            const initialLogicState = gameLogic.getGameStatus(initialFen);
+            setGameState(prev => ({
+                ...prev,
+                fen: initialFen,
+                currentTurn: 'w', 
+                localPlayerColor: 'w', 
+                status: initialLogicState.appStatus,
+                isCheck: initialLogicState.isCheck,
+                isCheckmate: initialLogicState.isCheckmate,
+                drawType: initialLogicState.drawType,
+                opponentPeerId: opponentPeerId, 
+                isHost: true, 
+            }));
+            const setupPayload: InitialGameSetupPayload = {
+                startingFen: initialFen,
+                playerWhite: peerId!, 
+                playerBlack: opponentPeerId!,
+            };
+            sendGameData({
+                type: P2PMessageKeyEnum.INITIAL_GAME_SETUP,
+                payload: setupPayload,
+            } as InitialGameSetupMessage);
+        }
     }
   }, [isConnected, isHost, gameId, assignedColor, opponentPeerId, peerId, sendGameData, connectionStatus, gameState.fen, gameState.currentTurn, gameState.status, gameState.moveHistory]);
 
   const handleHostGame = () => {
-    const newGameId = hostGame();
+    const newGameId = hostGame(); 
     const initialFen = gameLogic.initializeNewGame();
     const initialLogicState = gameLogic.getGameStatus(initialFen);
     setGameState({
       gameId: newGameId,
       fen: initialFen,
       currentTurn: 'w',
-      localPlayerColor: 'w',
-      opponentPeerId: null,
+      localPlayerColor: 'w', 
+      opponentPeerId: null, 
       isHost: true,
       status: GameStatus.AWAITING_CONNECTION,
       isCheck: initialLogicState.isCheck,
       isCheckmate: initialLogicState.isCheckmate,
       drawType: initialLogicState.drawType,
-      castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } },
-      enPassantTarget: null,
-      winner: null,
-      moveHistory: [],
+      castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } }, 
+      enPassantTarget: null, 
+      winner: null, 
+      moveHistory: [], 
     });
   };
 
   const handleJoinGame = (idToJoin: string) => {
-    joinGame(idToJoin);
-    const initialFen = gameLogic.initializeNewGame();
+    joinGame(idToJoin); 
+    const initialFen = gameLogic.initializeNewGame(); 
     setGameState(prev => ({
         ...prev,
         gameId: idToJoin,
-        fen: initialFen,
-        currentTurn: 'w',
+        fen: initialFen, 
+        currentTurn: 'w', 
         isHost: false,
-        status: GameStatus.SETTING_UP,
+        status: GameStatus.SETTING_UP, 
+        localPlayerColor: null, 
+        opponentPeerId: null, 
+        castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } },
+        enPassantTarget: null,
+        winner: null,
+        moveHistory: [],
+        isCheck: false,
+        isCheckmate: false,
+        drawType: null,
     }));
   };
 
   const handlePieceDrop = (sourceSquare: Square, targetSquare: Square, pieceString: string): boolean => {
-    if (!isConnected || gameState.localPlayerColor === null || gameState.currentTurn !== gameState.localPlayerColor || gameState.status !== GameStatus.IN_PROGRESS && gameState.status !== GameStatus.WHITE_IN_CHECK && gameState.status !== GameStatus.BLACK_IN_CHECK) {
-      console.log("Cannot make move: Not your turn or game not in progress.");
+    if (!isConnected || gameState.localPlayerColor === null || gameState.currentTurn !== gameState.localPlayerColor || 
+        !(gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK || gameState.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL)
+    ) {
+      console.log("Cannot make move: Not your turn, game not in progress, or not connected.", {
+        isConnected,
+        localPlayerColor: gameState.localPlayerColor,
+        currentTurn: gameState.currentTurn,
+        status: gameState.status
+      });
       return false;
     }
-    const initialPieceColorForTurnCheck = pieceString[0] as PlayerColor;
-    if (initialPieceColorForTurnCheck !== gameState.localPlayerColor) {
-        console.log("Cannot move opponent's piece.");
+    const chessForValidation = new Chess(gameState.fen);
+    const pieceOnSource = chessForValidation.get(sourceSquare);
+    if (!pieceOnSource || pieceOnSource.color !== gameState.localPlayerColor) {
+        console.log("Cannot move: Piece on source square is not yours or doesn't exist.", { sourceSquare, pieceOnSource, localColor: gameState.localPlayerColor });
         return false;
     }
-    const chessInstanceForPieceCheck = new Chess(gameState.fen);
-    const pieceDetailsFromFen = chessInstanceForPieceCheck.get(sourceSquare);
-    if (!pieceDetailsFromFen) {
-      console.error(`[handlePieceDrop] Critical error: No piece found on source square ${sourceSquare} in FEN ${gameState.fen} during piece drop. Aborting move.`);
-      return false;
-    }
-    const actualPieceColor = pieceDetailsFromFen.color as PlayerColor;
-    const actualPieceType = pieceDetailsFromFen.type as AppPieceSymbol;
-    const isPawn = actualPieceType === PieceSymbol.PAWN;
-    const promotionRank = actualPieceColor === 'w' ? '8' : '1';
+
+    const isPawn = pieceOnSource.type === PieceSymbol.PAWN;
+    const promotionRank = gameState.localPlayerColor === 'w' ? '8' : '1';
     const isPromotion = isPawn && targetSquare[1] === promotionRank;
 
     if (isPromotion) {
-      return false;
+      console.log("Promotion move detected, should be handled by PromotionChoice component via Board.");
+      return false; 
     }
+
     const moveAttempt: AppMove = { from: sourceSquare, to: targetSquare, promotion: null };
     const moveResult = gameLogic.makeMove(gameState.fen, moveAttempt);
+
     if (moveResult) {
       const newLogicState = gameLogic.getGameStatus(moveResult.newFen);
       setGameState(prev => ({
@@ -321,33 +346,36 @@ function App() {
       sendGameData({ type: P2PMessageKeyEnum.MOVE, payload: movePayload });
       return true;
     } else {
-      console.log("Invalid non-promotion move attempted by local player:", moveAttempt);
+      console.log("Invalid non-promotion move attempted by local player:", moveAttempt, "FEN:", gameState.fen);
       return false;
     }
   };
 
   const onBoardPromotionPieceSelect = (
-    selectedPromotionPiece?: string,
+    selectedPromotionPiece?: string, 
     promoteFromSquare?: Square,
     promoteToSquare?: Square
   ): boolean => {
     if (!isConnected || gameState.localPlayerColor === null || gameState.currentTurn !== gameState.localPlayerColor ||
-        (gameState.status !== GameStatus.IN_PROGRESS && gameState.status !== GameStatus.WHITE_IN_CHECK && gameState.status !== GameStatus.BLACK_IN_CHECK)) {
-      console.log("Cannot complete promotion: Not your turn or game not in progress/check state.");
+        !(gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK || gameState.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL)) {
+      console.log("Cannot complete promotion: Not your turn or game not in appropriate state.");
       return false;
     }
-    if (!promoteFromSquare || !promoteToSquare || !selectedPromotionPiece) {
-      console.error("Promotion selection data incomplete:", { selectedPromotionPiece, promoteFromSquare, promoteToSquare });
+    if (!promoteFromSquare || !promoteToSquare || !selectedPromotionPiece || selectedPromotionPiece.length !== 2) {
+      console.error("Promotion selection data incomplete or malformed:", { selectedPromotionPiece, promoteFromSquare, promoteToSquare });
       return false;
     }
-    const promotionPiece = selectedPromotionPiece.charAt(1).toLowerCase() as Exclude<AppPieceSymbol, 'p' | 'k'>;
+
+    const promotionPieceType = selectedPromotionPiece.charAt(1).toLowerCase() as Exclude<AppPieceSymbol, 'p' | 'k'>;
     const moveWithPromotion: AppMove = {
       from: promoteFromSquare,
       to: promoteToSquare,
-      promotion: promotionPiece,
+      promotion: promotionPieceType,
     };
+
     console.log("Attempting promotion move via onBoardPromotionPieceSelect:", moveWithPromotion);
     const moveResult = gameLogic.makeMove(gameState.fen, moveWithPromotion);
+
     if (moveResult) {
       const newLogicState = gameLogic.getGameStatus(moveResult.newFen);
       setGameState(prev => ({
@@ -364,7 +392,7 @@ function App() {
       const movePayload: MovePayload = {
         from: promoteFromSquare,
         to: promoteToSquare,
-        promotion: promotionPiece,
+        promotion: promotionPieceType,
       };
       sendGameData({ type: P2PMessageKeyEnum.MOVE, payload: movePayload });
       return true;
@@ -373,20 +401,38 @@ function App() {
       return false;
     }
   };
-  
-  const handleResign = () => {
-    if (isConnected && gameState.status === GameStatus.IN_PROGRESS) {
-        sendGameData({ type: P2PMessageKeyEnum.RESIGN, payload: null });
-        setGameState(prev => ({
-            ...prev,
-            status: prev.localPlayerColor === 'w' ? GameStatus.RESIGNATION_WHITE_WINS : GameStatus.RESIGNATION_BLACK_WINS,
-            winner: prev.localPlayerColor === 'w' ? 'b' : 'w',
-            isCheck: false,
-            isCheckmate: false,
-            drawType: null,
-        }));
+
+  const handleResignClick = () => {
+    if (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK) {
+      setShowResignConfirmDialog(true);
+    } else {
+      console.log("Cannot resign: Game not in a resignable state.");
     }
   };
+
+  const handleConfirmResign = () => {
+    setShowResignConfirmDialog(false);
+    if (gameState.localPlayerColor && isConnected) {
+      // Send P2P message
+      const resignMessage = p2pService.createResignMessage(gameState.localPlayerColor);
+      sendGameData(resignMessage);
+
+      // Update local game state immediately
+      const newLogicState = gameLogic.handleResignation(gameState.fen, gameState.localPlayerColor);
+      setGameState(prev => ({
+        ...prev,
+        ...newLogicState,
+      }));
+      console.log(`Player ${gameState.localPlayerColor} resigned. Local state updated.`);
+    } else {
+      console.warn("Cannot resign: No local player color or not connected.");
+    }
+  };
+
+  const handleCancelResign = () => {
+    setShowResignConfirmDialog(false);
+  };
+  
 
   const getGameDisplayStatusForNavBar = (
     gs: AppGameState,
@@ -395,14 +441,11 @@ function App() {
     let turnIndicator = '';
     const turnColorText = gs.currentTurn === 'w' ? 'White' : 'Black';
 
-    const isGameDrawn = gs.winner === 'draw' ||
-                        gs.status === GameStatus.STALEMATE_DRAW ||
-                        gs.status === GameStatus.DRAW_BY_THREEFOLD_REPETITION ||
-                        gs.status === GameStatus.DRAW_BY_FIFTY_MOVE_RULE ||
-                        gs.status === GameStatus.DRAW_BY_INSUFFICIENT_MATERIAL ||
-                        gs.status === GameStatus.DRAW_AGREED;
+    const isGameEffectivelyOver = gs.isCheckmate || !!gs.winner || !!gs.drawType ||
+                                gs.status === GameStatus.RESIGNATION_BLACK_WINS ||
+                                gs.status === GameStatus.RESIGNATION_WHITE_WINS;
 
-    if (gs.currentTurn && !gs.isCheckmate && !isGameDrawn && gs.status !== GameStatus.RESIGNATION_BLACK_WINS && gs.status !== GameStatus.RESIGNATION_WHITE_WINS) {
+    if (gs.currentTurn && !isGameEffectivelyOver) {
       const isMyTurn = localPlayerColor === gs.currentTurn;
       turnIndicator = isMyTurn ? `Your turn (${turnColorText})` : `${turnColorText}'s turn`;
     }
@@ -417,10 +460,10 @@ function App() {
         case DrawType.THREEFOLD_REPETITION: return 'Draw by Threefold Repetition!';
         case DrawType.INSUFFICIENT_MATERIAL: return 'Draw by Insufficient Material!';
         case DrawType.FIFTY_MOVE_RULE: return 'Draw by Fifty-Move Rule!';
-        default: return 'Game Drawn!';
+        default: return 'Game Drawn!'; 
       }
     }
-    if (gs.winner === 'draw') { 
+     if (gs.winner === 'draw') { 
         switch (gs.status) {
             case GameStatus.STALEMATE_DRAW: return 'Draw by Stalemate!';
             case GameStatus.DRAW_BY_THREEFOLD_REPETITION: return 'Draw by Threefold Repetition!';
@@ -430,9 +473,10 @@ function App() {
             default: return 'Game Drawn!';
         }
     }
-    if (gs.status === GameStatus.RESIGNATION_WHITE_WINS) return 'Black resigned. White wins.';
-    if (gs.status === GameStatus.RESIGNATION_BLACK_WINS) return 'White resigned. Black wins.';
-    if (gs.isCheck) return `Check! ${turnIndicator}`;
+    if (gs.status === GameStatus.RESIGNATION_WHITE_WINS) return localPlayerColor === 'w' ? 'You resigned. Black wins.' : 'Opponent resigned. White wins!';
+    if (gs.status === GameStatus.RESIGNATION_BLACK_WINS) return localPlayerColor === 'b' ? 'You resigned. White wins.' : 'Opponent resigned. Black wins!';
+    
+    if (gs.isCheck && !isGameEffectivelyOver) return `Check! ${turnIndicator}`;
     if (turnIndicator) return turnIndicator;
 
     if (gs.status === GameStatus.AWAITING_CONNECTION || gs.status === GameStatus.SETTING_UP) {
@@ -441,43 +485,43 @@ function App() {
     if (gs.status === GameStatus.RESYNCHRONIZING_GAME_STATE || gs.status === GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC) {
         return "Synchronizing...";
     }
-     if (gs.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL) {
+     if (gs.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL && !isGameEffectivelyOver) { 
         return `Game Synced! ${turnIndicator || (gs.currentTurn ? `${gs.currentTurn === 'w' ? 'White' : 'Black'}'s turn` : '') }`;
     }
-    if (gs.status === GameStatus.IN_PROGRESS && turnIndicator) {
-        return turnIndicator;
-    }
-    if (gs.status === GameStatus.IN_PROGRESS && !turnIndicator && gs.currentTurn) {
+    if (gs.status === GameStatus.IN_PROGRESS && !isGameEffectivelyOver && gs.currentTurn) { 
        return `${gs.currentTurn === 'w' ? 'White' : 'Black'}'s turn`;
     }
-    return ''; 
+    if (gs.status === GameStatus.DISCONNECTED_OPPONENT_LEFT) return "Opponent disconnected.";
+    if (gs.status === GameStatus.GAME_ENDED_BY_ERROR) return "Game ended due to an error.";
+
+    return 'Loading game...'; 
   };
 
-  const getNavBarDisplayStatus = (
-    currentAppGameStatus: GameStatus,
-    hookP2PStatus: GameStatus,
-    isConnectedToPeer: boolean,
+  const getNavBarDisplayStatus = ( 
+    currentAppGameStatus: GameStatus, 
+    hookP2PStatus: GameStatus,      
+    isConnectedToPeer: boolean,     
     currentRoomId: string | null,
     currentOpponentId: string | null,
-    localColor: PlayerColor | null
+    localColor: PlayerColor | null 
   ): string => {
     if (!currentRoomId) return "Not in a game";
 
-    if (!isConnectedToPeer || !currentOpponentId) {
+    if (!isConnectedToPeer || !currentOpponentId) { 
       switch (hookP2PStatus) {
         case GameStatus.AWAITING_CONNECTION: return "Waiting for opponent...";
         case GameStatus.SETTING_UP: return "Setting up room...";
         case GameStatus.CONNECTION_FAILED: return "Connection Failed";
-        case GameStatus.DISCONNECTED_OPPONENT_LEFT: return "Opponent Left";
         default: return "Establishing Connection...";
       }
     }
-
+    
     switch (currentAppGameStatus) {
       case GameStatus.IN_PROGRESS:
       case GameStatus.WHITE_IN_CHECK:
       case GameStatus.BLACK_IN_CHECK:
         return "Connected"; 
+      
       case GameStatus.CONNECTION_LOST_ATTEMPTING_RECONNECT:
         return "Reconnecting...";
       case GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC:
@@ -486,86 +530,94 @@ function App() {
         return "Syncing game...";
       case GameStatus.RESYNCHRONIZATION_SUCCESSFUL:
         return "Game Synced"; 
+      
       case GameStatus.DISCONNECTED_OPPONENT_LEFT:
         return "Opponent Left";
-      case GameStatus.CHECKMATE_WHITE_WINS: return "White Wins!";
-      case GameStatus.CHECKMATE_BLACK_WINS: return "Black Wins!";
-      case GameStatus.RESIGNATION_WHITE_WINS: return localColor === 'b' ? "Opponent Resigned (White Wins)" : "You Resigned (Black Wins)";
-      case GameStatus.RESIGNATION_BLACK_WINS: return localColor === 'w' ? "Opponent Resigned (Black Wins)" : "You Resigned (White Wins)";
-      case GameStatus.STALEMATE_DRAW: return "Draw: Stalemate";
-      case GameStatus.DRAW_BY_INSUFFICIENT_MATERIAL: return "Draw: Insufficient Material";
-      case GameStatus.DRAW_BY_THREEFOLD_REPETITION: return "Draw: Repetition";
-      case GameStatus.DRAW_BY_FIFTY_MOVE_RULE: return "Draw: 50 Move Rule";
-      case GameStatus.DRAW_AGREED: return "Draw Agreed";
+      case GameStatus.CHECKMATE_WHITE_WINS: 
+      case GameStatus.CHECKMATE_BLACK_WINS:
+      case GameStatus.RESIGNATION_WHITE_WINS:
+      case GameStatus.RESIGNATION_BLACK_WINS:
+      case GameStatus.STALEMATE_DRAW:
+      case GameStatus.DRAW_BY_INSUFFICIENT_MATERIAL:
+      case GameStatus.DRAW_BY_THREEFOLD_REPETITION:
+      case GameStatus.DRAW_BY_FIFTY_MOVE_RULE:
+      case GameStatus.DRAW_AGREED:
+        return "Game Over"; 
+      
+      case GameStatus.GAME_ENDED_BY_ERROR:
+        return "Error";
+
       default:
-        return currentAppGameStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return "Connected"; 
     }
   };
 
-  const navBarConnectionStatusDisplay = getNavBarDisplayStatus(
-    gameState.status,
-    connectionStatus, 
-    isConnected,
-    gameState.gameId,
-    gameState.opponentPeerId,
-    gameState.localPlayerColor
-  );
+const gameOverStatuses: readonly GameStatus[] = [
+  GameStatus.RESIGNATION_WHITE_WINS,
+  GameStatus.RESIGNATION_BLACK_WINS,
+  GameStatus.STALEMATE_DRAW,
+  GameStatus.DRAW_BY_THREEFOLD_REPETITION,
+  GameStatus.DRAW_BY_FIFTY_MOVE_RULE,
+  GameStatus.DRAW_BY_INSUFFICIENT_MATERIAL,
+  GameStatus.DRAW_AGREED,
+  GameStatus.GAME_ENDED_BY_ERROR,
+  GameStatus.DISCONNECTED_OPPONENT_LEFT,
+  GameStatus.CHECKMATE_BLACK_WINS,
+  GameStatus.CHECKMATE_WHITE_WINS,
+] as const;
 
-  const navBarGameDisplayStatus = getGameDisplayStatusForNavBar(
-    gameState,
-    gameState.localPlayerColor,
-  );
+const isGameOver = gameState.isCheckmate ||
+                   !!gameState.winner ||
+                   !!gameState.drawType ||
+                   gameOverStatuses.includes(gameState.status);
 
-  const gameHasEffectivelyStarted = isConnected &&
-                         !!gameState.opponentPeerId &&
-                         (
-                           gameState.status === GameStatus.IN_PROGRESS ||
-                           gameState.status === GameStatus.WHITE_IN_CHECK ||
-                           gameState.status === GameStatus.BLACK_IN_CHECK ||
-                           gameState.status.toUpperCase().includes("WINS") ||
-                           gameState.status.toUpperCase().includes("DRAW") ||
-                           gameState.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL ||
-                           gameState.status === GameStatus.OPPONENT_RECONNECTED_AWAITING_SYNC || 
-                           gameState.status === GameStatus.RESYNCHRONIZING_GAME_STATE
-                         );
-  
-  const showMainGameComponents = isConnected && !!gameState.opponentPeerId && !!gameState.localPlayerColor;
+  const navBarConnectionStatusDisplay = getNavBarDisplayStatus(gameState.status, connectionStatus, isConnected, gameId, opponentPeerId, gameState.localPlayerColor);
+  const navBarGameDisplayStatus = getGameDisplayStatusForNavBar(gameState, gameState.localPlayerColor);
+
+  const showMainGameComponents = isConnected && opponentPeerId && gameState.localPlayerColor && 
+                                 (gameState.status === GameStatus.IN_PROGRESS || 
+                                  gameState.status === GameStatus.WHITE_IN_CHECK || 
+                                  gameState.status === GameStatus.BLACK_IN_CHECK ||
+                                  gameState.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL || 
+                                  isGameOver); 
 
   return (
     <div className="App">
       <NavBar
         connectionStatusDisplay={navBarConnectionStatusDisplay}
-        gameId={gameState.gameId}
+        gameId={gameId}
         peerId={peerId}
-        isHost={gameState.isHost}
-        opponentPeerId={gameState.opponentPeerId}
-        rawConnectionStatus={connectionStatus}
+        isHost={isHost ?? false} 
+        opponentPeerId={opponentPeerId}
+        rawConnectionStatus={connectionStatus} 
         gameDisplayStatus={navBarGameDisplayStatus}
         currentTurn={gameState.currentTurn}
         isCheck={gameState.isCheck}
+        localPlayerColor={gameState.localPlayerColor}
+        isGameOver={isGameOver}
+        onResignConfirm={handleConfirmResign} // Changed from handleResignConfirm
       />
       <main className="app-main-content">
-        {!gameHasEffectivelyStarted && (
+        <div className="content-wrapper">
           <div className="content-section connection-manager-section">
             <ConnectionManager
               peerId={peerId}
-              gameId={gameState.gameId}
+              gameId={gameId}
               isConnected={isConnected}
-              isHost={gameState.isHost}
-              connectionStatus={connectionStatus} 
+              isHost={isHost}
               onHostGame={handleHostGame}
               onJoinGame={handleJoinGame}
               onLeaveGame={leaveGame}
               error={error}
+              connectionStatus={connectionStatus}
               opponentPeerId={gameState.opponentPeerId}
               assignedColor={gameState.localPlayerColor}
             />
           </div>
-        )}
 
-        {showMainGameComponents && (
-          <div className="content-section game-area">
-            {!gameHasEffectivelyStarted && (
+          {showMainGameComponents && (
+            <React.Fragment>
+              <div className="content-section game-area">
                 <StatusDisplay
                     gameStatus={gameState.status} 
                     currentTurn={gameState.currentTurn}
@@ -579,37 +631,76 @@ function App() {
                     isHost={gameState.isHost}
                     gameId={gameState.gameId}
                 />
-            )}
-            <div className="board-container"> 
-              <Board
-                gameFen={gameState.fen}
-                onPieceDrop={handlePieceDrop}
-                boardOrientation={gameState.localPlayerColor || 'w'}
-                arePiecesDraggable={ 
-                  isConnected &&
-                  gameState.currentTurn === gameState.localPlayerColor &&
-                  (gameState.status === GameStatus.IN_PROGRESS ||
-                    gameState.status === GameStatus.WHITE_IN_CHECK ||
-                    gameState.status === GameStatus.BLACK_IN_CHECK ||
-                    gameState.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL)}
-                onPromotionPieceSelect={onBoardPromotionPieceSelect}
-              />
-            </div>
-            {(isConnected && (gameState.status === GameStatus.IN_PROGRESS || gameState.status === GameStatus.WHITE_IN_CHECK || gameState.status === GameStatus.BLACK_IN_CHECK)) &&
-                 <button onClick={handleResign} className="mt-1">Resign</button>
-            }
-          </div>
-        )}
-        
-        {!gameHasEffectivelyStarted && !showMainGameComponents && (
+                <div className="board-container"> 
+                  <Board
+                    gameFen={gameState.fen}
+                    onPieceDrop={handlePieceDrop} 
+                    boardOrientation={gameState.localPlayerColor || 'w'} 
+                    arePiecesDraggable={ 
+                      isConnected &&
+                      gameState.localPlayerColor === gameState.currentTurn && 
+                      !isGameOver && 
+                      (gameState.status === GameStatus.IN_PROGRESS ||
+                        gameState.status === GameStatus.WHITE_IN_CHECK ||
+                        gameState.status === GameStatus.BLACK_IN_CHECK ||
+                        gameState.status === GameStatus.RESYNCHRONIZATION_SUCCESSFUL) 
+                    }
+                    onPromotionPieceSelect={onBoardPromotionPieceSelect}
+                  />
+                </div>
+              </div>
+              {/* Game controls like resign, draw offer */}
+              {isConnected && !isGameOver &&
+               (gameState.status === GameStatus.IN_PROGRESS ||
+                gameState.status === GameStatus.WHITE_IN_CHECK ||
+                gameState.status === GameStatus.BLACK_IN_CHECK) &&
+                (
+                <div className="content-section game-controls text-center">
+                  <button onClick={handleResignClick} className="game-button">Resign</button>
+                  {/* <button className="game-button">Offer Draw</button> */}
+                </div>
+              )}
+
+              {showResignConfirmDialog && (
+                <div className="modal-overlay">
+                  <div className="modal-content">
+                    <h3>Resign Game?</h3>
+                    <p>Are you sure you want to resign? This will result in a loss.</p>
+                    <div className="modal-actions">
+                      <button onClick={handleConfirmResign} className="game-button confirm">Confirm</button>
+                      <button onClick={handleCancelResign} className="game-button cancel">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          )}
+          
+          {!showMainGameComponents && (
              <div className="content-section text-center">
                   <p>
                     {peerId ? `Your ID: ${peerId}. ` : 'Initializing... '}
-                    {gameState.gameId && !isConnected ? `Attempting to join Game ID: ${gameState.gameId}. Please wait...` : 
-                    !gameState.gameId && !isConnected ? 'Host or join a game to start.' : ''}
+                    {gameState.gameId && !isConnected && !opponentPeerId ? `Attempting to join Game ID: ${gameState.gameId}. Please wait...` : 
+                    !gameState.gameId && !isConnected ? 'Host or join a game to start.' : 
+                    isConnected && !opponentPeerId && gameState.isHost ? 'Waiting for opponent to join...' :
+                    'Setting up game...'}
                   </p>
+                  <StatusDisplay 
+                    gameStatus={gameState.status}
+                    currentTurn={gameState.currentTurn}
+                    localPlayerColor={gameState.localPlayerColor}
+                    isConnected={isConnected}
+                    isCheck={gameState.isCheck}
+                    isCheckmate={gameState.isCheckmate}
+                    winner={gameState.winner}
+                    drawType={gameState.drawType}
+                    opponentPeerId={gameState.opponentPeerId}
+                    isHost={gameState.isHost}
+                    gameId={gameState.gameId}
+                  />
              </div>
-        )}
+          )}
+        </div>
       </main>
     </div>
   );

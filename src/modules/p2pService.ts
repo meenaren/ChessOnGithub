@@ -1,9 +1,10 @@
 import { P2PMessageKeyEnum } from '../utils/types';
 import type {
   Move, MovePayload, PlayerColor, GameStatus, // Added GameStatus here as it's used in createGameStateMessage and createSyncGameStateMessage
-  MoveMessage, GameStateUpdateMessage, ResignMessage, DrawOfferMessage, GameStateUpdatePayload,
+  MoveMessage, GameStateUpdateMessage, ResignMessage, DrawOfferMessage, GameStateUpdatePayload, ResignPayload,
   RequestGameStateMessage, SyncGameStateMessage, SyncGameStatePayload, RequestGameStatePayload // Added new types
 } from '../utils/types';
+import { eventBus } from '../utils/eventBus';
 
 /**
  * This service helps in constructing and interpreting P2P messages.
@@ -105,14 +106,19 @@ export const createSyncGameStateMessage = (
 };
 
 /**
- * Placeholder for creating a resignation message.
- * @returns A P2PMessage object.
+ * Creates a P2P message for a player resigning.
+ * @param resigningPlayerColor - The color of the player who is resigning.
+ * @returns A ResignMessage object.
  */
-export const createResignMessage = (): ResignMessage => {
-    return {
-        type: P2PMessageKeyEnum.RESIGN,
-        payload: null,
-    };
+export const createResignMessage = (resigningPlayerColor: PlayerColor): ResignMessage => {
+  const payload: ResignPayload = {
+    resigningPlayerColor,
+    timestamp: new Date().toISOString(),
+  };
+  return {
+    type: P2PMessageKeyEnum.RESIGN,
+    payload,
+  };
 };
 
 /**
@@ -140,6 +146,7 @@ export const handleReceivedMove = (payload: MovePayload | null | undefined /*, g
   if (payload) {
     console.log('P2P Service: Received move:', payload);
     // Example: gameLogicModule.applyOpponentMove({ from: payload.from, to: payload.to, promotion: payload.promotion });
+    eventBus.publish('opponentMove', payload);
   } else {
     console.warn('P2P Service: Received move message with no payload.');
   }
@@ -154,17 +161,28 @@ export const handleReceivedGameState = (payload: Record<string, any> | null | un
   if (payload && payload.fen && payload.turn) {
     console.log('P2P Service: Received game state:', payload);
     // Example: gameLogicModule.loadFen(payload.fen, payload.turn);
+    // This might be better handled by a specific 'gameStateSync' event
+    // if it's a full sync, or 'gameStateUpdate' for incremental.
+    // For now, let's assume it's a general update.
+    eventBus.publish('gameStateUpdate', payload as GameStateUpdatePayload);
   } else {
     console.warn('P2P Service: Received game state message with invalid payload.');
   }
 };
 
 /**
- * Placeholder for processing a resignation.
+ * Processes a received resignation message from the opponent.
+ * @param payload - The payload of the resignation message.
  */
-export const handleReceivedResignation = (/* gameLogicModule: any */) => {
-    console.log('P2P Service: Opponent resigned.');
-    // Example: gameLogicModule.endGame('resignation', opponentColor);
+export const handleReceivedResignation = (payload: ResignPayload | null | undefined) => {
+  if (payload && payload.resigningPlayerColor) {
+    console.log(`P2P Service: Opponent (${payload.resigningPlayerColor}) resigned.`);
+    // Emit an event that App.tsx or a game context can listen to.
+    // This event will trigger the gameLogic.handleResignation function.
+    eventBus.publish('opponentResigned', payload);
+  } else {
+    console.warn('P2P Service: Received resignation message with invalid or missing payload.');
+  }
 };
 
 

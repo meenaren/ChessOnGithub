@@ -88,9 +88,21 @@ const StatusDisplay: React.FC<StatusDisplayProps> = ({
         statusText = 'Game Drawn!'; // Generic draw
     }
   } else if (gameStatus === GameStatus.RESIGNATION_WHITE_WINS) {
-    statusText = 'Black resigned. White wins.';
+    if (localPlayerColor === 'b') {
+      statusText = 'White resigned. You win!';
+    } else if (localPlayerColor === 'w') {
+      statusText = 'You resigned. Black wins.';
+    } else {
+      statusText = 'White resigned. Black wins.'; // Spectator or unassigned
+    }
   } else if (gameStatus === GameStatus.RESIGNATION_BLACK_WINS) {
-    statusText = 'White resigned. Black wins.';
+    if (localPlayerColor === 'w') {
+      statusText = 'Black resigned. You win!';
+    } else if (localPlayerColor === 'b') {
+      statusText = 'You resigned. White wins.';
+    } else {
+      statusText = 'Black resigned. White wins.'; // Spectator or unassigned
+    }
   } else if (isCheck) {
     statusText = `Check! ${turnIndicator}`;
   } else if (turnIndicator) {

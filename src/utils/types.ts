@@ -145,15 +145,21 @@ export interface ErrorPayload extends JsonObject {
   [key: string]: JsonValue; // Index signature
 }
 
+export interface ResignPayload extends JsonObject {
+  resigningPlayerColor: PlayerColor;
+  timestamp: string; // ISO 8601 format
+  [key: string]: JsonValue; // Index signature
+}
+
 // Specific P2P Message Types
 export type ConnectionConfirmedMessage = P2PMessage<ConnectionConfirmedPayload>;
 export type InitialGameSetupMessage = P2PMessage<InitialGameSetupPayload>;
 export type MoveMessage = P2PMessage<MovePayload>;
 export type GameStateUpdateMessage = P2PMessage<GameStateUpdatePayload>;
 export type ErrorMessage = P2PMessage<ErrorPayload>;
-export type ResignMessage = P2PMessage<null>;
-export type DrawOfferMessage = P2PMessage<null>;
-export type DrawAcceptMessage = P2PMessage<null>;
+export type ResignMessage = P2PMessage<ResignPayload>; // Updated payload type
+export type DrawOfferMessage = P2PMessage<null>; // Assuming null payload for now
+export type DrawAcceptMessage = P2PMessage<null>; // Assuming null payload for now
 export type RequestGameStateMessage = P2PMessage<RequestGameStatePayload>;
 export type SyncGameStateMessage = P2PMessage<SyncGameStatePayload>;
 

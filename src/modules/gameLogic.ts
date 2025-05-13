@@ -147,3 +147,41 @@ export const getCurrentBoardState = (chessInstance: Chess): string => {
 // This logic would typically reside in App.tsx or useGameConnection
 // and then be passed to components. gameLogic.ts itself is color-agnostic
 // beyond what the FEN string dictates for the current turn.
+
+/**
+ * Handles a player's resignation.
+ * @param currentFen The FEN string of the current board position.
+ * @param resigningPlayerColor The color of the player who resigned.
+ * @returns A GameLogicState object describing the game state after resignation.
+ */
+export const handleResignation = (
+  currentFen: string,
+  resigningPlayerColor: PlayerColor
+): GameLogicState => {
+  const chess = new Chess(currentFen); // Load current game
+  const winner = resigningPlayerColor === 'w' ? 'b' : 'w';
+  const loser = resigningPlayerColor;
+
+  let appStatus: AppGameStatus;
+  if (winner === 'w') {
+    appStatus = AppGameStatus.RESIGNATION_WHITE_WINS;
+  } else {
+    appStatus = AppGameStatus.RESIGNATION_BLACK_WINS;
+  }
+
+  // Get the base status, then override resignation-specific fields
+  const baseStatus = getGameStatus(currentFen);
+
+  return {
+    ...baseStatus, // Spread existing state like FEN, turn (though turn is less relevant now)
+    isGameOver: true,
+    winner: winner,
+    // loser: loser, // Not explicitly in GameLogicState, but implied by winner and appStatus
+    appStatus: appStatus,
+    isCheck: chess.isCheck(), // Keep current check status for historical record if needed
+    isCheckmate: false, // Not a checkmate
+    isStalemate: false, // Not a stalemate
+    isDraw: false,      // Not a draw
+    drawType: null,     // No draw type
+  };
+};

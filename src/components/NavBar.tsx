@@ -1,10 +1,16 @@
-import React from 'react';
-import { GameStatus, type PlayerColor, type DrawType } from '../utils/types';
+import React, { useState } from 'react';
+import { GameStatus, type PlayerColor } from '../utils/types';
 
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogTitle from '@mui/material/DialogTitle';
 
 interface NavBarProps {
   // Connection Status Props
@@ -19,10 +25,11 @@ interface NavBarProps {
   gameDisplayStatus: string; // The main string like "White's Turn", "Checkmate!"
   currentTurn: PlayerColor | null;
   isCheck: boolean;
-  // isCheckmate: boolean; // gameDisplayStatus should cover this
-  // winner: PlayerColor | 'draw' | null; // gameDisplayStatus should cover this
-  // drawType: AppDrawType | null; // gameDisplayStatus should cover this
-  // localPlayerColor: PlayerColor | null; // gameDisplayStatus might use this for "Your turn"
+  localPlayerColor: PlayerColor | null;
+  isGameOver: boolean;
+
+  // Callbacks
+  onResignConfirm: () => void; // Updated: will get player color from localPlayerColor prop
 }
 
 const getStatusColor = (status: GameStatus | undefined): string => {
@@ -74,86 +81,138 @@ const NavBar: React.FC<NavBarProps> = ({
   // opponentPeerId,
   rawConnectionStatus,
   gameDisplayStatus,
-  // currentTurn, // gameDisplayStatus should incorporate this
-  // isCheck, // gameDisplayStatus should incorporate this
+  localPlayerColor,
+  isGameOver,
+  onResignConfirm,
 }) => {
+  const [openResignConfirmDialog, setOpenResignConfirmDialog] = useState(false);
+
+  const handleResignClick = () => {
+    setOpenResignConfirmDialog(true);
+  };
+
+  const handleCloseResignDialog = (confirmed: boolean) => {
+    setOpenResignConfirmDialog(false);
+    if (confirmed && localPlayerColor) {
+      onResignConfirm(); // App.tsx will handle sending the message with localPlayerColor
+    }
+  };
+
   return (
-    <AppBar position="static">
-      <Toolbar 
-        sx={{ 
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap', 
-          gap: { xs: 1, sm: 2 },
-          py: { xs: 1, sm: 0.5 }, // Padding top/bottom for toolbar
-          px: { xs: 1, sm: 2 }   // Padding left/right for toolbar
-        }}
-      >
-        {/* Logo */}
-        <Box sx={{ display: 'flex', alignItems: 'center', my: { xs: 0.5, sm: 0 } }}>
-          <Box
-            component="img"
-            sx={{
-              height: 100,
-              width: 100,
-              display: 'block', // Remove extra space below img
-            }}
-            alt="ChessP2P Logo"
-            src="/ChessOnGithub/logo.png" // Assuming this path is correct for the project setup
-          />
-          <Typography variant="h5" component="h1" sx={{ ml: 1.5, color: 'common.white', fontWeight: 'bold', alignSelf: 'center' }}>
-            ChessP2P
-          </Typography>
-        </Box>
-
-        {/* Game Status */}
-        <Typography
-          variant="h6"
-          component="div"
-          sx={{
-            flexGrow: 1,
-            textAlign: 'center',
-            fontWeight: 'medium',
-            my: { xs: 0.5, sm: 0 },
-            px: { xs: 1, sm: 2 }, // Padding to prevent text touching edges if logo/status are wide
-            order: { xs: 3, sm: 2 }, // Ensure game status is last on XS if wrapped, middle on SM+
-            width: { xs: '100%', sm: 'auto' }, // Full width on XS if wrapped
-            color: 'common.white' // Added color for visibility
-          }}
-        >
-          {gameDisplayStatus}
-        </Typography>
-
-        {/* Connection Status */}
-        <Box
+    <>
+      <AppBar position="static">
+        <Toolbar
           sx={{
             display: 'flex',
-            flexDirection: 'column',
-            alignItems: { xs: 'center', sm: 'flex-end' },
-            textAlign: { xs: 'center', sm: 'right' },
-            minWidth: { sm: '180px' },
-            my: { xs: 0.5, sm: 0 },
-            order: { xs: 2, sm: 3 } // Ensure connection status is second on XS, last on SM+
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: { xs: 1, sm: 2 },
+            py: { xs: 1, sm: 0.5 },
+            px: { xs: 1, sm: 2 }
           }}
         >
+          {/* Logo */}
+          <Box sx={{ display: 'flex', alignItems: 'center', my: { xs: 0.5, sm: 0 }, order: { xs: 1, sm: 1 } }}>
+            <Box
+              component="img"
+              sx={{
+                height: { xs: 60, sm: 80 }, // Adjusted size
+                width: { xs: 60, sm: 80 },  // Adjusted size
+                display: 'block',
+              }}
+              alt="ChessP2P Logo"
+              src="/ChessOnGithub/logo.png"
+            />
+            <Typography variant="h5" component="h1" sx={{ ml: 1.5, color: 'common.white', fontWeight: 'bold', alignSelf: 'center' }}>
+              ChessP2P
+            </Typography>
+          </Box>
+
+          {/* Game Status */}
           <Typography
-            variant="body2"
+            variant="h6"
+            component="div"
             sx={{
-              color: getStatusColor(rawConnectionStatus),
-              fontWeight: 'bold',
+              flexGrow: 1,
+              textAlign: 'center',
+              fontWeight: 'medium',
+              my: { xs: 0.5, sm: 0 },
+              px: { xs: 1, sm: 2 },
+              order: { xs: 3, sm: 2 },
+              width: { xs: '100%', sm: 'auto' },
+              color: 'common.white'
             }}
           >
-            {connectionStatusDisplay}
+            {gameDisplayStatus}
           </Typography>
-          {gameId && (
-            <Typography variant="caption" sx={{ color: 'common.white', mt: 0.25 }}> {/* Changed color */}
-              (Room: {gameId})
-            </Typography>
-          )}
-        </Box>
-      </Toolbar>
-    </AppBar>
+
+          {/* Right Aligned Group: Resign Button & Connection Status */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, order: { xs: 2, sm: 3 }, flexDirection: { xs: 'row-reverse', sm: 'row' } }}>
+            {/* Resign Button */}
+            <Button
+              variant="contained"
+              color="secondary" // Or "warning" or "error" depending on desired emphasis
+              onClick={handleResignClick}
+              disabled={isGameOver || !localPlayerColor}
+              sx={{ my: { xs: 0.5, sm: 0 } }}
+            >
+              Resign
+            </Button>
+            
+            {/* Connection Status */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: { xs: 'center', sm: 'flex-end' },
+                textAlign: { xs: 'center', sm: 'right' },
+                minWidth: { sm: '180px' }, // Keep minWidth for consistency
+                my: { xs: 0.5, sm: 0 },
+              }}
+            >
+              <Typography
+                variant="body2"
+                sx={{
+                  color: getStatusColor(rawConnectionStatus),
+                  fontWeight: 'bold',
+                }}
+              >
+                {connectionStatusDisplay}
+              </Typography>
+              {gameId && (
+                <Typography variant="caption" sx={{ color: 'common.white', mt: 0.25 }}>
+                  (Room: {gameId})
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        </Toolbar>
+      </AppBar>
+
+      {/* Resign Confirmation Dialog */}
+      <Dialog
+        open={openResignConfirmDialog}
+        onClose={() => handleCloseResignDialog(false)}
+        aria-labelledby="resign-dialog-title"
+        aria-describedby="resign-dialog-description"
+      >
+        <DialogTitle id="resign-dialog-title">Confirm Resignation</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="resign-dialog-description">
+            Are you sure you want to resign? This will result in a loss.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => handleCloseResignDialog(false)} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={() => handleCloseResignDialog(true)} color="secondary" autoFocus>
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 
